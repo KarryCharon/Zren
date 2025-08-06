@@ -18,7 +18,7 @@ fn testResizeFn(context: *anyopaque, memory: []u8, alignment: Alignment, new_len
     if (gc.vm.config.userData) |ud| if (@as([*]u8, @ptrCast(ud)) != data[0..].ptr) return false;
 
     if (new_len == 0) {
-        gc.allocator.free(memory);
+        gc.vm.rawAllocator.free(memory);
         return false;
     }
 
@@ -31,7 +31,7 @@ fn testRemapFn(context: *anyopaque, memory: []u8, alignment: Alignment, new_len:
     if (gc.vm.config.userData) |ud| if (@as([*]u8, @ptrCast(ud)) != data[0..].ptr) return null;
 
     if (new_len == 0) {
-        gc.allocator.free(memory);
+        gc.vm.rawAllocator.free(memory);
         return null;
     }
 

@@ -728,9 +728,19 @@ pub const ObjFiber = struct {
         return .{ .allocator = allocator };
     }
 
+    pub fn fromStack(self: *@This(), stack: GenericStack(Value)) void {
+        self.stack = stack;
+    }
+
     pub fn initStack(self: *@This(), capacity: usize) void {
         self.stack = GenericStack(Value).init(self.allocator);
         self.stack.resize(capacity) catch unreachable;
+    }
+
+    pub fn fromFrames(self: *@This(), frames: GenericBuffer(CallFrame)) void {
+        self.rawFrames = frames;
+        self.frames = self.rawFrames.data.items;
+        self.numFrames = 0;
     }
 
     pub fn initFrames(self: *@This(), capacity: usize) void {
@@ -971,7 +981,6 @@ pub const ObjFunc = struct {
 
 pub const ObjForeign = struct {
     obj: Obj,
-    allocator: *Allocator,
     data: [*]u8 = undefined,
     pub inline fn asObj(self: *@This()) *Obj {
         return @ptrCast(self);
@@ -979,16 +988,6 @@ pub const ObjForeign = struct {
 
     pub inline fn cast(self: *@This(), comptime T: type) *T {
         return @ptrCast(@alignCast(self.data));
-    }
-
-    pub inline fn allocData(self: *@This(), size: usize) void {
-        self.data = self.allocator.rawAlloc(size, .@"8", @returnAddress()) orelse unreachable;
-        @memset(self.data[0..size], 0);
-        // TODO 何时释放? 以及验证算法正确性
-    }
-
-    pub inline fn freeData(self: *@This()) void {
-        self.allocator.rawFree(self.data, .@"8", @returnAddress());
     }
 };
 

@@ -12,6 +12,8 @@ const OpCode = @import("opcode.zig").OpCode;
 const P = @import("parser.zig");
 const Method = @import("method.zig").Method;
 const Path = @import("path.zig").Path;
+const GenericBuffer = @import("buffer.zig").GenericBuffer;
+const GenericStack = @import("stack.zig").GenericStack;
 
 const Compiler = P.Compiler;
 const Parser = P.Parser;
@@ -179,23 +181,22 @@ pub const ZrenVM = struct {
 
         // 内存分配函数
         pub fn alloc(context: *anyopaque, len: usize, alignment: Alignment, ra: usize) ?[*]u8 {
-            // std.debug.print("分配内存: len={d}, alignment={d}, ra={x}\n", .{ len, alignment, ra });
             const self = cast(context);
-            // self.vm.tryGarbageCollect(0, len); // TODO
+            self.vm.tryGarbageCollect(0, len);
             return self.valloc(self.ptr, len, alignment, ra);
         }
 
         // 内存调整函数
         pub fn resize(context: *anyopaque, memory: []u8, alignment: Alignment, newLen: usize, ra: usize) bool {
             const self = cast(context);
-            // self.vm.tryGarbageCollect(memory.len, newLen); // TODO
+            self.vm.tryGarbageCollect(memory.len, newLen);
             return self.vresize(self.ptr, memory, alignment, newLen, ra);
         }
 
         // 内存重映射函数
         pub fn remap(context: *anyopaque, memory: []u8, alignment: Alignment, newLen: usize, ra: usize) ?[*]u8 {
             const self = cast(context);
-            // self.vm.tryGarbageCollect(memory.len, newLen); // TODO
+            self.vm.tryGarbageCollect(memory.len, newLen);
             return self.vremap(self.ptr, memory, alignment, newLen, ra);
         }
 
@@ -323,7 +324,8 @@ pub const ZrenVM = struct {
 
         self.methodNames.deinit();
 
-        self.allocator.destroy(self.gcAllocatorRef.?);
+        self.rawAllocator.destroy(self.gcAllocatorRef.?);
+        self.rawAllocator.destroy(self);
     }
 
     pub fn freeVM(self: *@This()) void {
@@ -338,12 +340,11 @@ pub const ZrenVM = struct {
     }
 
     pub fn collectGarbage(self: *@This()) void {
-        comptime if (builtin.mode == .Debug) {
+        if (builtin.mode == .Debug) {
             // TODO 添加trace memory 和 trace gc
-            // IO.stdout.print("------ gc ------\n", .{});
+            // print("------ gc ------\n", .{});
             // const before = self.bytesAllocated;
-        };
-
+        }
         // 标记所有可到达的对象.
 
         // 重置此值. 当标记对象时, 它们的大小将被重新计算, 这样就可以跟踪使用多少内存, 而不需要知道每个*释放*对象的大小.
@@ -360,7 +361,7 @@ pub const ZrenVM = struct {
         var handle: ?*ZrenHandle = self.handles;
         while (handle) |h| : (handle = h.next) self.grayValue(h.value);
 
-        self.markCompiler(self.compiler); // 编译器正在使用的任意对象(如果有的话).
+        if (self.compiler) |c| self.markCompiler(c); // 编译器正在使用的任意对象(如果有的话).
 
         self.blackenSymbolTable(&self.methodNames); // 方法名
 
@@ -500,8 +501,8 @@ pub const ZrenVM = struct {
         return compiler.endCompiler("(script)");
     }
 
-    fn markCompiler(self: *@This(), inCompiler: ?*Compiler) void {
-        const compiler: *Compiler = inCompiler orelse return;
+    fn markCompiler(self: *@This(), inCompiler: *Compiler) void {
+        const compiler: *Compiler = inCompiler;
         self.grayValue(compiler.parser.curr.value);
         self.grayValue(compiler.parser.prev.value);
         self.grayValue(compiler.parser.next.value);
@@ -555,11 +556,7 @@ pub const ZrenVM = struct {
             }
         } else {
             // 没找到，新建
-            const str = self.newString(name).asString();
-            self.pushRoot(&str.obj);
-            module.variableNames.push(str);
-            symbol = @intCast(module.variableNames.count - 1);
-            self.popRoot();
+            symbol = @intCast(self.symbolTableAdd(&module.variableNames, name));
             module.variables.push(value.*);
         }
 
@@ -900,16 +897,17 @@ pub const ZrenVM = struct {
         return value;
     }
 
-    pub fn newVM(cfg: ?ZrenConfiguration) ZrenVM {
+    pub fn newVM(cfg: ?ZrenConfiguration) *ZrenVM {
         var config: ZrenConfiguration = cfg orelse .DEFAULT_CONFIG;
         config.allocator = config.allocator orelse std.heap.c_allocator;
-        var vm: ZrenVM = .{
+        var vm = config.allocator.?.create(ZrenVM) catch unreachable;
+        vm.* = .{
             .config = config,
             .rawAllocator = config.allocator.?,
             .nextGC = config.initialHeapSize,
         };
-        vm.allocator = GcAllocator.init(config.allocator.?, &vm); // TODO 这里需要优化, 逻辑太怪了
-        vm.gray = std.ArrayList(*Obj).init(vm.allocator);
+        vm.allocator = GcAllocator.init(config.allocator.?, vm); // TODO 这里需要优化, 逻辑太怪了
+        vm.gray = std.ArrayList(*Obj).init(vm.rawAllocator);
 
         vm.gray.ensureTotalCapacity(4) catch unreachable;
         vm.nextGC = vm.config.initialHeapSize;
@@ -922,9 +920,10 @@ pub const ZrenVM = struct {
     }
 
     pub fn newList(self: *@This(), eleCount: usize) *ObjList {
+        const elements = ValueBuffer.init(self.allocator);
         var list = self.allocator.create(ObjList) catch unreachable;
         self.initObj(list.asObj(), .OBJ_LIST, self.listClass);
-        list.elements = ValueBuffer.init(self.allocator);
+        list.elements = elements;
         list.elements.resize(eleCount);
         return list;
     }
@@ -956,24 +955,32 @@ pub const ZrenVM = struct {
     }
 
     pub fn newMap(self: *@This()) *ObjMap {
+        const entries = V.ValueHashMap.init(self.allocator);
         var modules = self.allocator.create(ObjMap) catch unreachable;
         self.initObj(modules.asObj(), .OBJ_MAP, self.mapClass);
-        modules.entries = V.ValueHashMap.init(self.allocator);
+        modules.entries = entries;
         return modules;
     }
 
     pub fn newFiber(self: *@This(), closure: ?*ObjClosure) *ObjFiber {
+        var frames = GenericBuffer(CallFrame).init(self.allocator);
+        frames.resize(Constants.C.INITIAL_CALL_FRAMES);
+
         const stackCapacity = if (closure) |c| Utils.powerOf2Ceil(c.func.maxSlots + 1) else 1;
+        var stack = GenericStack(Value).init(self.allocator);
+        stack.resize(stackCapacity) catch unreachable;
 
         const fiber = self.allocator.create(ObjFiber) catch unreachable;
         fiber.allocator = self.allocator;
 
         self.initObj(fiber.asObj(), .OBJ_FIBER, self.fiberClass);
 
-        fiber.initStack(stackCapacity);
+        // fiber.initStack(stackCapacity);
+        fiber.fromStack(stack);
         fiber.loadStack(0); // 代表从栈底开始
 
-        fiber.initFrames(Constants.C.INITIAL_CALL_FRAMES);
+        // fiber.initFrames(Constants.C.INITIAL_CALL_FRAMES);
+        fiber.fromFrames(frames);
 
         fiber.openUpvalues = null;
         fiber.caller = null;
@@ -989,23 +996,27 @@ pub const ZrenVM = struct {
     }
 
     pub fn newForeign(self: *@This(), classObj: *ObjClass, size: usize) *ObjForeign {
+        const data = self.allocator.alloc(u8, size) catch unreachable;
+        @memset(data, 0);
         const object = self.allocator.create(ObjForeign) catch unreachable;
         self.initObj(object.asObj(), .OBJ_FOREIGN, classObj);
-        object.allocator = &self.allocator;
-        object.allocData(size);
+        object.data = data.ptr;
         return object;
     }
 
     pub fn newFunction(self: *@This(), module: ?*ObjModule, maxSlots: usize) *ObjFunc {
+        const source_lines = UsizeBuffer.init(self.allocator);
         const debug = self.allocator.create(FuncDebug) catch unreachable;
         debug.name = &.{};
-        debug.source_lines = UsizeBuffer.init(self.allocator);
+        debug.source_lines = source_lines;
 
+        const constants = ValueBuffer.init(self.allocator);
+        const code = ByteBuffer.init(self.allocator);
         const func = self.allocator.create(ObjFunc) catch unreachable;
         self.initObj(func.asObj(), .OBJ_FUNC, self.fnClass);
 
-        func.constants = ValueBuffer.init(self.allocator);
-        func.code = ByteBuffer.init(self.allocator);
+        func.constants = constants;
+        func.code = code;
         func.module = module;
         func.maxSlots = maxSlots;
         func.numUpvalues = 0;
@@ -1160,7 +1171,7 @@ pub const ZrenVM = struct {
         }
 
         const content = self.allocator.alloc(u8, totalLength) catch unreachable;
-
+        defer self.allocator.free(content);
         i = 0;
         var s = content.ptr;
         inline for (format) |c| {
@@ -1247,6 +1258,7 @@ pub const ZrenVM = struct {
         const existing = self.modules.mapGet(name);
         if (!existing.isUndefined()) return existing;
         self.pushRoot(name.asObj());
+        defer self.popRoot();
 
         var result: ZrenLoadModuleResult = .{};
         // defer self.allocator.free(result.source); // TODO 内存清理在onComplete中进项??
@@ -1262,7 +1274,6 @@ pub const ZrenVM = struct {
 
         if (result.source.len == 0) {
             self.fiber.?.err = self.stringFormat("Could not load module '@'.", .{name});
-            self.popRoot();
             return .NULL_VAL;
         }
 
@@ -1272,11 +1283,8 @@ pub const ZrenVM = struct {
 
         if (moduleCLosure == null) {
             self.fiber.?.err = self.stringFormat("Could not compile module '@'.", .{name});
-            self.popRoot();
             return .NULL_VAL;
         }
-
-        self.popRoot();
 
         return moduleCLosure.?.asObj().toVal();
     }
@@ -1290,14 +1298,16 @@ pub const ZrenVM = struct {
     }
 
     pub fn newModule(self: *@This(), name: ?*ObjString) *ObjModule {
+        const variableNames = SymbolTable.init(self.allocator);
+        const variables = ValueBuffer.init(self.allocator);
         const module = self.allocator.create(ObjModule) catch unreachable;
 
         // 模块不会作为第一类对象使用, 所以不需要类
         self.initObj(module.asObj(), .OBJ_MODULE, null);
 
         self.pushRoot(module.asObj());
-        module.variableNames = SymbolTable.init(self.allocator);
-        module.variables = ValueBuffer.init(self.allocator);
+        module.variableNames = variableNames;
+        module.variables = variables;
 
         module.name = name;
 
@@ -1315,9 +1325,10 @@ pub const ZrenVM = struct {
     }
 
     pub fn newInstance(self: *@This(), class: *ObjClass) Value {
+        const fields = self.allocator.alloc(Value, class.num_fields.?) catch unreachable;
         var instance = self.allocator.create(ObjInstance) catch unreachable;
         self.initObj(instance.asObj(), .OBJ_INSTANCE, class);
-        instance.fields = self.allocator.alloc(Value, class.num_fields.?) catch unreachable;
+        instance.fields = fields;
         for (0..class.num_fields.?) |i| {
             instance.fields[i] = .NULL_VAL;
         }
@@ -1325,17 +1336,18 @@ pub const ZrenVM = struct {
     }
 
     pub fn newClosure(self: *@This(), func: *ObjFunc) *ObjClosure {
+        const upvalues = self.allocator.alloc(?*ObjUpvalue, func.numUpvalues) catch unreachable;
         const closure = self.allocator.create(ObjClosure) catch unreachable;
         self.initObj(closure.asObj(), .OBJ_CLOSURE, self.fnClass);
         closure.func = func;
-        closure.upvalues = self.allocator.alloc(?*ObjUpvalue, func.numUpvalues) catch unreachable;
-        for (0..func.numUpvalues) |i| closure.upvalues[i] = undefined;
+        closure.upvalues = upvalues;
+        for (0..func.numUpvalues) |i| closure.upvalues[i] = null;
         return closure;
     }
 
     pub fn newUpvalue(self: *@This(), value: *Value, index: usize) *ObjUpvalue {
         const upvalue = self.allocator.create(ObjUpvalue) catch unreachable;
-        self.initObj(upvalue.asObj(), .OBJ_UPVALUE, undefined);
+        self.initObj(upvalue.asObj(), .OBJ_UPVALUE, null);
         upvalue.value = value;
         upvalue.fromStackIndex = index;
         upvalue.closed = .NULL_VAL;
@@ -1365,6 +1377,7 @@ pub const ZrenVM = struct {
     }
 
     pub fn newSingleClass(self: *@This(), num_fields: ?usize, name: *ObjString) *ObjClass {
+        const methods = MethodBuffer.init(self.allocator);
         var classObj = self.allocator.create(ObjClass) catch unreachable;
         self.initObj(classObj.asObj(), .OBJ_CLASS, null);
         classObj.super_class = null;
@@ -1373,7 +1386,7 @@ pub const ZrenVM = struct {
         classObj.attributes = .NULL_VAL;
 
         self.pushRoot(classObj.asObj());
-        classObj.methods = MethodBuffer.init(self.allocator);
+        classObj.methods = methods;
         self.popRoot();
 
         return classObj;
@@ -1404,9 +1417,10 @@ pub const ZrenVM = struct {
     }
 
     pub fn newString(self: *@This(), name: []const u8) Value {
+        const value = self.allocator.dupe(u8, name) catch unreachable;
         var s = self.allocator.create(ObjString) catch unreachable;
         self.initObj(s.asObj(), .OBJ_STRING, self.stringClass);
-        s.value = self.allocator.dupe(u8, name) catch unreachable;
+        s.value = value;
         s.doHash();
         return s.asObj().toVal();
     }
@@ -1430,13 +1444,11 @@ pub const ZrenVM = struct {
     }
 
     fn grayBuffer(self: *@This(), buffer: *ValueBuffer) void {
-        for (buffer.data.items) |v| self.grayValue(v);
+        for (0..buffer.count) |i| self.grayValue(buffer.at(i));
     }
 
     fn blackenObjs(self: *@This()) void {
-        while (self.gray.pop()) |obj| {
-            self.blackenObj(obj);
-        }
+        while (self.gray.pop()) |o| self.blackenObj(o);
     }
 
     fn blackenObj(self: *@This(), obj: *Obj) void {
@@ -1610,13 +1622,6 @@ pub const ZrenVM = struct {
         self.grayValue(upvalue.closed);
         // 追踪仍在使用的内存量
         self.bytesAllocated += @sizeOf(ObjUpvalue);
-    }
-
-    pub fn allocateString(self: *@This(), length: usize) *ObjString {
-        const stringObj = self.allocator.create(ObjString) catch unreachable;
-        self.initObj(stringObj.asObj(), .OBJ_STRING, self.stringClass);
-        stringObj.value = self.allocator.alloc(u8, length) catch unreachable;
-        return stringObj;
     }
 
     pub fn createForeign(self: *@This(), fiber: *ObjFiber, classObj: *ObjClass) void {

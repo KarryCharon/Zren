@@ -11,9 +11,9 @@ const ZrenVM = VM.ZrenVM;
 const ZrenConfiguration = VM.ZrenConfiguration;
 const ZrenInterpretResult = VM.ZrenInterpretResult;
 
-var vm: ZrenVM = undefined;
+var vm: *ZrenVM = undefined;
 
-fn initVM(allocator: std.mem.Allocator, isApiTest: bool) ZrenVM {
+fn initVM(allocator: std.mem.Allocator, isApiTest: bool) *ZrenVM {
     var config = ZrenConfiguration.init(allocator);
     config.resolveModuleFn = T.resolveModulePathEx;
     config.loadModuleFn = T.loadModuleEx;
@@ -72,9 +72,9 @@ pub fn testRun() !u8 {
     vm = initVM(allocator, isApiTest);
     defer vm.deinit();
 
-    const result = T.runFile(&vm, script);
+    const result = T.runFile(vm, script);
 
-    if (isApiTest) exitCode = APITest_Run(&vm, script);
+    if (isApiTest) exitCode = APITest_Run(vm, script);
 
     if (result == .RESULT_COMPILE_ERROR) return C.EX_DATAERR;
     if (result == .RESULT_RUNTIME_ERROR) return C.EX_SOFTWARE;
