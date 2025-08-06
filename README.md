@@ -4,6 +4,12 @@
 3. 原wren中所有benchmark用例均正常运行
 4. 使用zig实现
 
+# 测试
+## 运行脚本
+1. `zig build`
+2. `./zig-out/bin/Zren some_script.wren`
+3. 测试脚本可以在 https://github.com/wren-lang/wren/tree/main/example 中找到
+
 # 后续计划
 1. variable.index  改为usize
 2. 检查所有 -1 的变量
