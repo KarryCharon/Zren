@@ -11,24 +11,24 @@ pub fn resetStackAfterForeignConstructBindClass(className: []const u8, methods: 
 pub fn resetStackAfterForeignConstructRunTests(vm: *VM.ZrenVM) u8 {
     vm.ensureSlots(1);
     vm.getVariable("./test/api/reset_stack_after_foreign_construct", "Test", 0);
-    const testClass = vm.getSlotHandle(0);
+    const test_class = vm.getSlotHandle(0);
 
-    const callConstruct = vm.makeCallHandle("callConstruct()");
-    const afterConstruct = vm.makeCallHandle("afterConstruct(_,_)");
+    const call_construct = vm.makeCallHandle("callConstruct()");
+    const after_construct = vm.makeCallHandle("afterConstruct(_,_)");
 
     vm.ensureSlots(1);
-    vm.setSlotHandle(0, testClass);
-    _ = vm.callHandle(callConstruct);
+    vm.setSlotHandle(0, test_class);
+    _ = vm.callHandle(call_construct);
 
     vm.ensureSlots(3);
-    vm.setSlotHandle(0, testClass);
+    vm.setSlotHandle(0, test_class);
     vm.setSlotDouble(1, 1.0);
     vm.setSlotDouble(2, 2.0);
-    _ = vm.callHandle(afterConstruct);
+    _ = vm.callHandle(after_construct);
 
-    vm.releaseHandle(testClass);
-    vm.releaseHandle(callConstruct);
-    vm.releaseHandle(afterConstruct);
+    vm.releaseHandle(test_class);
+    vm.releaseHandle(call_construct);
+    vm.releaseHandle(after_construct);
 
     return 0;
 }

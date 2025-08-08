@@ -116,22 +116,22 @@ fn ensureOutsideForeign(vm: *VM.ZrenVM) void {
     // 为了在foreign方法之外测试行为，创建一个新的单独的VM.
     const config = VM.ZrenConfiguration.init(vm.allocator);
 
-    var otherVM = VM.ZrenVM.newVM(config);
+    var other_vm = VM.ZrenVM.newVM(config);
 
-    const before = otherVM.getSlotCount();
+    const before = other_vm.getSlotCount();
 
-    otherVM.ensureSlots(20);
+    other_vm.ensureSlots(20);
 
-    const after = otherVM.getSlotCount();
+    const after = other_vm.getSlotCount();
 
     // 使用插槽来确保它们可用
-    for (0..20) |i| otherVM.setSlotDouble(i, @floatFromInt(i));
+    for (0..20) |i| other_vm.setSlotDouble(i, @floatFromInt(i));
 
     var sum: i64 = 0;
 
-    for (0..20) |i| sum += @intFromFloat(otherVM.getSlotDouble(i));
+    for (0..20) |i| sum += @intFromFloat(other_vm.getSlotDouble(i));
 
-    otherVM.freeVM();
+    other_vm.freeVM();
 
     var result = [_]u8{0} ** 100;
     const all = std.fmt.bufPrint(&result, "{d} -> {d} ({d})", .{ before, after, sum }) catch unreachable;

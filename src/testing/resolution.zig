@@ -52,11 +52,11 @@ fn runTestVM(vm: *VM.ZrenVM, configuration: *VM.ZrenConfiguration, source: []con
     configuration.errorFn = reportError;
     configuration.loadModuleFn = loadModule;
 
-    var otherVM = VM.ZrenVM.newVM(configuration.*);
-    defer otherVM.deinit();
+    var other_vm = VM.ZrenVM.newVM(configuration.*);
+    defer other_vm.deinit();
 
     // 应当可以执行代码
-    const result = otherVM.interpret("main", source);
+    const result = other_vm.interpret("main", source);
     if (result != .RESULT_SUCCESS) {
         vm.setSlotString(0, "error");
     } else {

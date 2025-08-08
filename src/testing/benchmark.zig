@@ -31,36 +31,36 @@ fn call(vm: *VM.ZrenVM) void {
     // 由于VM不是可重入的，我们不能在这个foreign方法中调用.
     // 相反，我们创建一个新的VM来运行调用测试.
     const config: VM.ZrenConfiguration = .{};
-    var otherVM = VM.ZrenVM.newVM(config);
-    defer otherVM.deinit();
+    var other_vm = VM.ZrenVM.newVM(config);
+    defer other_vm.deinit();
 
-    _ = otherVM.interpret("main", testScript);
+    _ = other_vm.interpret("main", testScript);
 
-    const method = otherVM.makeCallHandle("method(_,_,_,_)");
+    const method = other_vm.makeCallHandle("method(_,_,_,_)");
 
-    otherVM.ensureSlots(1);
-    otherVM.getVariable("main", "Test", 0);
-    const testClass = otherVM.getSlotHandle(0);
+    other_vm.ensureSlots(1);
+    other_vm.getVariable("main", "Test", 0);
+    const test_class = other_vm.getSlotHandle(0);
 
     var timer = std.time.Timer.start() catch unreachable;
 
     var result: f64 = 0;
     for (0..iterations) |_| {
-        otherVM.ensureSlots(5);
-        otherVM.setSlotHandle(0, testClass);
-        otherVM.setSlotDouble(1, 1.0);
-        otherVM.setSlotDouble(2, 2.0);
-        otherVM.setSlotDouble(3, 3.0);
-        otherVM.setSlotDouble(4, 4.0);
+        other_vm.ensureSlots(5);
+        other_vm.setSlotHandle(0, test_class);
+        other_vm.setSlotDouble(1, 1.0);
+        other_vm.setSlotDouble(2, 2.0);
+        other_vm.setSlotDouble(3, 3.0);
+        other_vm.setSlotDouble(4, 4.0);
 
-        _ = otherVM.callHandle(method);
+        _ = other_vm.callHandle(method);
 
-        result += otherVM.getSlotDouble(0);
+        result += other_vm.getSlotDouble(0);
     }
 
     const elapsed: f64 = @as(f64, @floatFromInt(timer.read())) * 1e-9;
-    otherVM.releaseHandle(testClass);
-    otherVM.releaseHandle(method);
+    other_vm.releaseHandle(test_class);
+    other_vm.releaseHandle(method);
 
     if (result == (1.0 + 2.0 + 3.0 + 4.0) * @as(f64, @floatFromInt(iterations))) {
         vm.setSlotDouble(0, elapsed);

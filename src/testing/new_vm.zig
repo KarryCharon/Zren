@@ -9,45 +9,45 @@ pub fn newVMBindMethod(signature: []const u8) ?VM.ZrenForeignMethodFn {
 }
 
 fn nullConfig(vm: *VM.ZrenVM) void {
-    var otherVM = VM.ZrenVM.newVM(null);
-    defer otherVM.deinit();
+    var other_vm = VM.ZrenVM.newVM(null);
+    defer other_vm.deinit();
 
     // 应当可以执行代码.
-    const result = otherVM.interpret("main", "1 + 2");
+    const result = other_vm.interpret("main", "1 + 2");
     vm.setSlotBool(0, result == .RESULT_SUCCESS);
 }
 
 fn multipleInterpretCalls(vm: *VM.ZrenVM) void {
-    var otherVM = VM.ZrenVM.newVM(null);
+    var other_vm = VM.ZrenVM.newVM(null);
     var result: VM.ZrenInterpretResult = undefined;
 
     var correct: bool = true;
 
     // 句柄应当在Wren代码的多次调用之间有效.
-    const absMethod = otherVM.makeCallHandle("abs");
+    const absMethod = other_vm.makeCallHandle("abs");
 
-    result = otherVM.interpret("main", "import \"random\" for Random");
+    result = other_vm.interpret("main", "import \"random\" for Random");
     correct = correct and (result == .RESULT_SUCCESS);
 
     for (0..5) |i| {
         // 在`interpret()`之前调用`ensureSlots()`避免在之后引入潜在问题.
-        otherVM.ensureSlots(2);
+        other_vm.ensureSlots(2);
 
         // 调用一个外部函数应当成功.
-        result = otherVM.interpret("main", "Random.new(12345)");
+        result = other_vm.interpret("main", "Random.new(12345)");
         correct = correct and (result == .RESULT_SUCCESS);
 
-        otherVM.ensureSlots(2);
-        otherVM.setSlotDouble(0, @floatFromInt(-@as(isize, @intCast(i))));
-        result = otherVM.callHandle(absMethod);
+        other_vm.ensureSlots(2);
+        other_vm.setSlotDouble(0, @floatFromInt(-@as(isize, @intCast(i))));
+        result = other_vm.callHandle(absMethod);
         correct = correct and (result == .RESULT_SUCCESS);
 
-        const absValue = otherVM.getSlotDouble(0);
+        const absValue = other_vm.getSlotDouble(0);
         correct = correct and (absValue == @as(f64, @floatFromInt(i)));
     }
 
     vm.setSlotBool(0, correct);
 
-    otherVM.releaseHandle(absMethod);
-    otherVM.freeVM();
+    other_vm.releaseHandle(absMethod);
+    other_vm.freeVM();
 }

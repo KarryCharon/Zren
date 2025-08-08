@@ -63,18 +63,18 @@ fn testFn(vm: *VM.ZrenVM) void {
     configuration.allocator = custom_allocator;
     configuration.user_data = @ptrCast(@alignCast(data[0..].ptr));
 
-    var otherVM = VM.ZrenVM.newVM(configuration);
-    defer otherVM.deinit();
+    var other_vm = VM.ZrenVM.newVM(configuration);
+    defer other_vm.deinit();
     // 应当能获取到.
-    if (otherVM.getUserData()) |ud| if (@intFromPtr(ud) != @intFromPtr(data[0..].ptr)) {
+    if (other_vm.getUserData()) |ud| if (@intFromPtr(ud) != @intFromPtr(data[0..].ptr)) {
         vm.setSlotBool(0, false);
         return;
     };
 
     // 应当能够设置.
-    otherVM.setUserData(@ptrCast(otherData[0..].ptr));
+    other_vm.setUserData(@ptrCast(otherData[0..].ptr));
 
-    if (otherVM.getUserData()) |ud| if (@intFromPtr(ud) != @intFromPtr(otherData[0..].ptr)) {
+    if (other_vm.getUserData()) |ud| if (@intFromPtr(ud) != @intFromPtr(otherData[0..].ptr)) {
         vm.setSlotBool(0, false);
         return;
     };

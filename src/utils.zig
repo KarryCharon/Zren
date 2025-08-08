@@ -5,7 +5,7 @@ pub fn strContains(str: []const u8, needle: []const u8) bool {
     return std.mem.indexOf(u8, str, needle) != null;
 }
 
-pub inline fn b8Tob16(b1: u8, b2: u8) u16 {
+pub inline fn byteToShort(b1: u8, b2: u8) u16 {
     return @as(u16, b1) << 8 | b2;
 }
 

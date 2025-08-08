@@ -45,7 +45,7 @@ pub const CallFrame = struct {
 
     pub inline fn rshort(self: *@This()) u16 {
         self.ipPosOffset(2);
-        return Utils.b8Tob16(self.ip[self.ip_offset - 2], self.ip[self.ip_offset - 1]);
+        return Utils.byteToShort(self.ip[self.ip_offset - 2], self.ip[self.ip_offset - 1]);
     }
 
     pub inline fn setStackRef(self: *@This(), ref: []Value) void {
@@ -682,13 +682,13 @@ pub const ObjClass = struct {
                 .CODE_SUPER_16,
                 => {
                     // 向constant槽中填充对超类的引用.
-                    const constant = Utils.b8Tob16(func.code.at(ip + 3), func.code.at(ip + 4));
+                    const constant = Utils.byteToShort(func.code.at(ip + 3), func.code.at(ip + 4));
                     func.constants.rat(constant).* = self.super_class.?.asObj().toVal();
                 },
 
                 .CODE_CLOSURE => {
                     // 绑定嵌套的闭包.
-                    const constant = Utils.b8Tob16(func.code.at(ip + 1), func.code.at(ip + 2));
+                    const constant = Utils.byteToShort(func.code.at(ip + 1), func.code.at(ip + 2));
                     self.bindMethodCode(func.constants.at(constant).asFunc());
                     break;
                 },
@@ -970,7 +970,7 @@ pub const ObjFunc = struct {
             => return 4,
 
             .CODE_CLOSURE => {
-                const constant = Utils.b8Tob16(self.code.at(ip + 1), self.code.at(ip + 2));
+                const constant = Utils.byteToShort(self.code.at(ip + 1), self.code.at(ip + 2));
                 const loadedFn = self.constants.at(constant).asFunc();
                 return 2 + loadedFn.num_upvalues * 2; // 对于constant来说是两个字节, 每个upvalue是两个字节.
             },

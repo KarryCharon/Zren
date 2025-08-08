@@ -76,15 +76,15 @@ pub fn GenericStack(comptime T: type) type {
             return self.top == 0;
         }
 
-        pub fn resize(self: *@This(), newCapacity: usize) !void {
+        pub fn resize(self: *@This(), new_capacity: usize) !void {
             // 尝试remap
-            if (self.allocator.remap(self.buffer, newCapacity)) |newBuffer| {
-                self.buffer = newBuffer;
+            if (self.allocator.remap(self.buffer, new_capacity)) |new_buf| {
+                self.buffer = new_buf;
             } else {
-                const newBuffer = try self.allocator.alloc(T, newCapacity);
-                @memcpy(newBuffer[0..self.top], self.buffer[0..self.top]);
+                const new_buf = try self.allocator.alloc(T, new_capacity);
+                @memcpy(new_buf[0..self.top], self.buffer[0..self.top]);
                 self.allocator.free(self.buffer);
-                self.buffer = newBuffer;
+                self.buffer = new_buf;
             }
         }
     };

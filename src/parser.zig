@@ -717,8 +717,8 @@ pub const Compiler = struct {
         const func = self.func orelse return;
         const loop = self.loop orelse return;
         // TODO test/limit/loop_too_far.wren 会导致这里溢出! 需要改进(临时用truncate)
-        const loopOffset: u16 = @truncate(func.code.count - loop.start + 3);
-        self.emitShortArg(.CODE_LOOP, loopOffset);
+        const loop_offset: u16 = @truncate(func.code.count - loop.start + 3);
+        self.emitShortArg(.CODE_LOOP, loop_offset);
 
         self.patchJump(loop.exit_jump);
 
@@ -737,7 +737,7 @@ pub const Compiler = struct {
         self.loop = loop.enclosing;
     }
 
-    // 为具有[signature]和[initializerSymbol]的初始化器创建匹配的构造函数方法
+    // 为具有[signature]和[initializer_symbol]的初始化器创建匹配的构造函数方法
     //
     // 在Wren中, 构造是一个两阶段的过程, 它涉及两个单独的方法:
     //   1. 有一个静态方法分配该类的新实例.
@@ -746,14 +746,14 @@ pub const Compiler = struct {
     //     CODE_CONSTRUCT - 将槽位0中的类替换为它的一个新实例.
     //     CODE_CALL      - 在新实例上调用初始化方法.
     //
-    // 该函数创建该方法并根据[initializerSymbol]调用初始化器.
-    fn createConstructor(self: *@This(), signature: *Signature, initializerSymbol: u16) void {
+    // 该函数创建该方法并根据[initializer_symbol]调用初始化器.
+    fn createConstructor(self: *@This(), signature: *Signature, initializer_symbol: u16) void {
         var c: Compiler = .{};
         c.init(self.parser, self, true);
 
         const op: OpCode = if (self.enclosing_class.?.is_foreign) .CODE_FOREIGN_CONSTRUCT else .CODE_CONSTRUCT;
         c.emitOp(op); // 分配新的实例
-        c.emitShortArg(OpCode.CODE_CALL_0.poffset(signature.arity), initializerSymbol); // 运行初始化方法
+        c.emitShortArg(OpCode.CODE_CALL_0.poffset(signature.arity), initializer_symbol); // 运行初始化方法
         c.emitOp(.CODE_RETURN); // 返回实例
         _ = c.endCompiler("");
     }
@@ -775,12 +775,12 @@ pub const Compiler = struct {
         const symbol = self.signatureSymbol(signature);
 
         // 检查类是否已经声明了具有此签名的函数.
-        const classInfo = self.enclosing_class orelse unreachable;
-        const methods = if (classInfo.in_static) &classInfo.static_methods else &classInfo.methods;
+        const class_info = self.enclosing_class orelse unreachable;
+        const methods = if (class_info.in_static) &class_info.static_methods else &class_info.methods;
         for (0..methods.count) |i| {
             if (methods.at(i) != symbol) continue;
-            const staticPrefix = if (classInfo.in_static) "static " else "";
-            self.doError("Class {s} already defines a {s}method '{s}'.", .{ classInfo.name.value, staticPrefix, name });
+            const staticPrefix = if (class_info.in_static) "static " else "";
+            self.doError("Class {s} already defines a {s}method '{s}'.", .{ class_info.name.value, staticPrefix, name });
             break;
         }
 
@@ -804,7 +804,7 @@ pub const Compiler = struct {
         if (!self.match(.TOKEN_HASH)) return false;
 
         self.num_attrs += 1;
-        const runtimeAccess = self.match(.TOKEN_BANG);
+        const runtime_access = self.match(.TOKEN_BANG);
         if (!self.match(.TOKEN_NAME)) self.doError("Expect an attribute definition after #.", .{});
 
         const group = self.parser.prev.value;
@@ -815,7 +815,7 @@ pub const Compiler = struct {
             if (self.match(.TOKEN_EQ)) {
                 value = self.consumeLiteral("Expect a Bool, Num, String or Identifier literal for an attribute value.");
             }
-            if (runtimeAccess) self.addToAttributeGroup(.NULL_VAL, key, value);
+            if (runtime_access) self.addToAttributeGroup(.NULL_VAL, key, value);
         } else if (self.match(.TOKEN_LEFT_PAREN)) {
             self.ignoreNewLines();
             if (self.match(.TOKEN_RIGHT_PAREN)) {
@@ -828,7 +828,7 @@ pub const Compiler = struct {
                     if (self.match(.TOKEN_EQ)) {
                         value = self.consumeLiteral("Expect a Bool, Num, String or Identifier literal for an attribute value.");
                     }
-                    if (runtimeAccess) self.addToAttributeGroup(group, key, value);
+                    if (runtime_access) self.addToAttributeGroup(group, key, value);
                     self.ignoreNewLines();
                     if (!self.match(.TOKEN_COMMA)) break;
                     self.ignoreNewLines();
@@ -901,10 +901,10 @@ pub const Compiler = struct {
         if (signature.stype == .SIG_INITIALIZER) {
             // 同时在元类上定义一个匹配的构造函数方法.
             signature.stype = .SIG_METHOD;
-            const constructorSymbol = self.signatureSymbol(&signature);
+            const ctor_symbol = self.signatureSymbol(&signature);
 
             self.createConstructor(&signature, method_symbol);
-            self.defineMethod(class_var, true, constructorSymbol);
+            self.defineMethod(class_var, true, ctor_symbol);
         }
 
         return true;
@@ -2101,8 +2101,8 @@ pub const Compiler = struct {
                 _ = self.discardLocals(loop.scope_depth + 1);
 
                 // 为跳转到循环体开头生成占位符指令.
-                const loopOffset: u16 = @intCast(self.func.?.code.count - loop.start + 3);
-                self.emitShortArg(.CODE_LOOP, loopOffset);
+                const loop_offset: u16 = @intCast(self.func.?.code.count - loop.start + 3);
+                self.emitShortArg(.CODE_LOOP, loop_offset);
             } else {
                 self.doError("Cannot use 'continue' outside of a loop.", .{});
                 return;
