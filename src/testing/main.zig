@@ -13,7 +13,7 @@ const ZrenInterpretResult = VM.ZrenInterpretResult;
 
 var vm: *ZrenVM = undefined;
 
-fn initVM(allocator: std.mem.Allocator, isApiTest: bool) *ZrenVM {
+fn initVm(allocator: std.mem.Allocator, is_api_test: bool) *ZrenVM {
     var config = ZrenConfiguration.init(allocator);
     config.resolveModuleFn = T.resolveModulePathEx;
     config.loadModuleFn = T.loadModuleEx;
@@ -21,12 +21,12 @@ fn initVM(allocator: std.mem.Allocator, isApiTest: bool) *ZrenVM {
     config.errorFn = T.errorEx;
     config.initialHeapSize = 1024 * 1024 * 100;
 
-    if (isApiTest) {
+    if (is_api_test) {
         config.bindForeignClassFn = APITest.APITest_bindForeignClass;
         config.bindForeignMethodFn = APITest.APITest_bindForeignMethod;
     }
 
-    return ZrenVM.newVM(config);
+    return ZrenVM.newVm(config);
 }
 
 const APITest_Run = @import("api_test.zig").APITest_Run;
@@ -51,7 +51,7 @@ pub fn handleArgs(allocator: std.mem.Allocator) u8 {
     return 0;
 }
 
-var testName: []const u8 = undefined;
+var test_name: []const u8 = undefined;
 
 pub fn testRun() !u8 {
     const allocator = std.heap.c_allocator;
@@ -63,21 +63,21 @@ pub fn testRun() !u8 {
     defer argsIterator.deinit();
     _ = argsIterator.next(); // 跳过可执行程序名
 
-    var exitCode: u8 = 0;
+    var exit_code: u8 = 0;
 
     var script: []const u8 = "";
     script = argsIterator.next() orelse script;
-    const isApiTest = T.isModuleAnAPITest(script);
+    const is_api_test = T.isModuleAnAPITest(script);
 
-    vm = initVM(allocator, isApiTest);
+    vm = initVm(allocator, is_api_test);
     defer vm.deinit();
 
     const result = T.runFile(vm, script);
 
-    if (isApiTest) exitCode = APITest_Run(vm, script);
+    if (is_api_test) exit_code = APITest_Run(vm, script);
 
     if (result == .RESULT_COMPILE_ERROR) return C.EX_DATAERR;
     if (result == .RESULT_RUNTIME_ERROR) return C.EX_SOFTWARE;
 
-    return exitCode;
+    return exit_code;
 }

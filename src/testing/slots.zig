@@ -116,7 +116,7 @@ fn ensureOutsideForeign(vm: *VM.ZrenVM) void {
     // 为了在foreign方法之外测试行为，创建一个新的单独的VM.
     const config = VM.ZrenConfiguration.init(vm.allocator);
 
-    var otherVM = VM.ZrenVM.newVM(config);
+    var otherVM = VM.ZrenVM.newVm(config);
 
     const before = otherVM.getSlotCount();
 

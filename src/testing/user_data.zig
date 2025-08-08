@@ -63,7 +63,7 @@ fn testFn(vm: *VM.ZrenVM) void {
     configuration.allocator = custom_allocator;
     configuration.userData = @ptrCast(@alignCast(data[0..].ptr));
 
-    var otherVM = VM.ZrenVM.newVM(configuration);
+    var otherVM = VM.ZrenVM.newVm(configuration);
     defer otherVM.deinit();
     // 应当能获取到.
     if (otherVM.getUserData()) |ud| if (@intFromPtr(ud) != @intFromPtr(data[0..].ptr)) {

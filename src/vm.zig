@@ -187,17 +187,17 @@ pub const ZrenVM = struct {
         }
 
         // 内存调整函数
-        pub fn resize(context: *anyopaque, memory: []u8, alignment: Alignment, newLen: usize, ra: usize) bool {
+        pub fn resize(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ra: usize) bool {
             const self = cast(context);
-            self.vm.tryGarbageCollect(memory.len, newLen);
-            return self.vresize(self.ptr, memory, alignment, newLen, ra);
+            self.vm.tryGarbageCollect(memory.len, new_len);
+            return self.vresize(self.ptr, memory, alignment, new_len, ra);
         }
 
         // 内存重映射函数
-        pub fn remap(context: *anyopaque, memory: []u8, alignment: Alignment, newLen: usize, ra: usize) ?[*]u8 {
+        pub fn remap(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ra: usize) ?[*]u8 {
             const self = cast(context);
-            self.vm.tryGarbageCollect(memory.len, newLen);
-            return self.vremap(self.ptr, memory, alignment, newLen, ra);
+            self.vm.tryGarbageCollect(memory.len, new_len);
+            return self.vremap(self.ptr, memory, alignment, new_len, ra);
         }
 
         // 内存释放函数
@@ -295,19 +295,19 @@ pub const ZrenVM = struct {
         return target.toString().len;
     }
 
-    pub fn init(alllocator: Allocator, isApiTest: bool) ZrenVM {
-        var config = ZrenConfiguration.init(alllocator);
+    pub fn init(allocator: Allocator, is_api_test: bool) ZrenVM {
+        var config = ZrenConfiguration.init(allocator);
         config.resolveModuleFn = resolveModulePathEx;
         config.loadModuleFn = loadModuleEx;
         config.writeFn = writeEx;
         config.errorFn = errorEx;
         config.initialHeapSize = 1024 * 1024 * 100;
         // TODO
-        if (isApiTest) {
+        if (is_api_test) {
             config.bindForeignClassFn = null;
             config.bindForeignMethodFn = null;
         }
-        return newVM(config);
+        return newVm(config);
     }
 
     pub fn deinit(self: *@This()) void {
@@ -332,9 +332,9 @@ pub const ZrenVM = struct {
         self.deinit();
     }
 
-    pub fn tryGarbageCollect(self: *@This(), oldSize: usize, newSize: usize) void {
-        self.bytesAllocated = self.bytesAllocated + newSize - oldSize;
-        if (newSize > 0 and self.bytesAllocated > self.nextGC) {
+    pub fn tryGarbageCollect(self: *@This(), old_size: usize, new_size: usize) void {
+        self.bytesAllocated = self.bytesAllocated + new_size - old_size;
+        if (new_size > 0 and self.bytesAllocated > self.nextGC) {
             self.collectGarbage();
         }
     }
@@ -397,21 +397,21 @@ pub const ZrenVM = struct {
         };
     }
 
-    pub fn compileSource(self: *@This(), module: []const u8, source: []const u8, isExpression: bool, printErrors: bool) ?*ObjClosure {
+    pub fn compileSource(self: *@This(), module: []const u8, source: []const u8, is_expression: bool, print_errors: bool) ?*ObjClosure {
         var nameValue: Value = .NULL_VAL;
         if (module.len > 0) {
             nameValue = self.newString(module);
             self.pushRoot(nameValue.asObj());
         }
 
-        const closure = self.compileInModule(&nameValue, source, isExpression, printErrors);
+        const closure = self.compileInModule(&nameValue, source, is_expression, print_errors);
 
         if (module.len > 0) self.popRoot();
 
         return closure;
     }
 
-    pub fn compileInModule(self: *@This(), name: *Value, source: []const u8, isExpression: bool, printErrors: bool) ?*ObjClosure {
+    pub fn compileInModule(self: *@This(), name: *Value, source: []const u8, is_expression: bool, print_errors: bool) ?*ObjClosure {
         var module = self.getModule(name.*);
         if (module == null) {
             module = self.newModule(name.asString());
@@ -426,7 +426,7 @@ pub const ZrenVM = struct {
             }
         }
         // TODO Should we still store the module even if it didn't compile?
-        var func = self.compile(module.?, source, isExpression, printErrors) orelse return null;
+        var func = self.compile(module.?, source, is_expression, print_errors) orelse return null;
 
         // 函数总被包装在闭包中.
         self.pushRoot(func.asObj());
@@ -435,7 +435,7 @@ pub const ZrenVM = struct {
         return closure;
     }
 
-    pub fn compile(self: *@This(), module: *ObjModule, source: []const u8, isExpression: bool, printErrors: bool) ?*ObjFunc {
+    pub fn compile(self: *@This(), module: *ObjModule, source: []const u8, is_expression: bool, print_errors: bool) ?*ObjFunc {
         const bomSize = Utils.bomSize(source);
         const csource = source[bomSize..];
 
@@ -457,7 +457,7 @@ pub const ZrenVM = struct {
         parser.next.line = 0;
         parser.next.value = .UNDEFINED_VAL;
 
-        parser.printErrors = printErrors;
+        parser.printErrors = print_errors;
         parser.hasError = false;
 
         parser.nextToken(); // 读取第一个token到 next
@@ -469,7 +469,7 @@ pub const ZrenVM = struct {
         compiler.init(&parser, null, false);
         compiler.ignoreNewLines();
 
-        if (isExpression) {
+        if (is_expression) {
             compiler.expression();
             compiler.consume(.TOKEN_EOF, "Expect end of expression.");
         } else {
@@ -565,7 +565,7 @@ pub const ZrenVM = struct {
         return symbol;
     }
 
-    pub fn ensureSlots(vm: *@This(), numSlots: usize) void {
+    pub fn ensureSlots(vm: *@This(), num_slots: usize) void {
         // 如果没有可用的fiber，创建一个供API使用
         if (vm.isApiStackNull()) {
             vm.fiber = vm.newFiber(null);
@@ -573,10 +573,10 @@ pub const ZrenVM = struct {
         }
 
         const currentSize = vm.fiber.?.stack.top - vm.apiStackOffset;
-        if (currentSize >= numSlots) return;
+        if (currentSize >= num_slots) return;
 
         // 增长栈
-        const needed = vm.apiStackOffset + numSlots;
+        const needed = vm.apiStackOffset + num_slots;
         vm.ensureStack(vm.fiber.?, needed);
 
         vm.fiber.?.loadStack(needed);
@@ -662,12 +662,12 @@ pub const ZrenVM = struct {
         vm.setSlot(slot, Value.numToValue(value));
     }
 
-    pub fn setSlotNewForeign(vm: *@This(), slot: usize, classSlot: usize, T: type) *T {
+    pub fn setSlotNewForeign(vm: *@This(), slot: usize, class_slot: usize, T: type) *T {
         vm.validateApiSlot(slot);
-        vm.validateApiSlot(classSlot);
-        Utils.assert(vm.apiStackAt(classSlot).isClass(), "Slot must hold a class.");
+        vm.validateApiSlot(class_slot);
+        Utils.assert(vm.apiStackAt(class_slot).isClass(), "Slot must hold a class.");
 
-        const classObj = vm.apiStackAt(classSlot).asClass();
+        const classObj = vm.apiStackAt(class_slot).asClass();
         Utils.assert(classObj.num_fields == null, "Class must be a foreign class.");
 
         const foreign = vm.newForeign(classObj, @sizeOf(T));
@@ -697,43 +697,43 @@ pub const ZrenVM = struct {
         vm.setSlot(slot, handle.?.value);
     }
 
-    pub fn getListCount(self: *@This(), listSlot: usize) usize {
-        self.validateApiSlot(listSlot);
-        Utils.assert(self.apiStackAt(listSlot).isList(), "Slot must hold a list.");
+    pub fn getListCount(self: *@This(), list_slot: usize) usize {
+        self.validateApiSlot(list_slot);
+        Utils.assert(self.apiStackAt(list_slot).isList(), "Slot must hold a list.");
 
-        return self.apiStackAt(listSlot).asList().elements.count;
+        return self.apiStackAt(list_slot).asList().elements.count;
     }
 
-    pub fn getListElement(self: *@This(), listSlot: usize, index: isize, elementSlot: usize) void {
-        self.validateApiSlot(listSlot);
-        self.validateApiSlot(elementSlot);
-        Utils.assert(self.apiStackAt(listSlot).isList(), "Slot must hold a list.");
+    pub fn getListElement(self: *@This(), list_slot: usize, index: isize, element_slot: usize) void {
+        self.validateApiSlot(list_slot);
+        self.validateApiSlot(element_slot);
+        Utils.assert(self.apiStackAt(list_slot).isList(), "Slot must hold a list.");
 
-        const elements = self.apiStackAt(listSlot).asList().elements;
+        const elements = self.apiStackAt(list_slot).asList().elements;
 
         const usedIndex = validateIndexPure(elements.count, index) orelse @panic("Index out of bounds.");
 
-        self.apiStackAt(elementSlot).* = elements.rat(usedIndex).*;
+        self.apiStackAt(element_slot).* = elements.rat(usedIndex).*;
     }
 
-    pub fn setListElement(self: *@This(), listSlot: usize, index: isize, elementSlot: usize) void {
-        self.validateApiSlot(listSlot);
-        self.validateApiSlot(elementSlot);
-        Utils.assert(self.apiStackAt(listSlot).isList(), "Slot must hold a list.");
+    pub fn setListElement(self: *@This(), list_slot: usize, index: isize, element_slot: usize) void {
+        self.validateApiSlot(list_slot);
+        self.validateApiSlot(element_slot);
+        Utils.assert(self.apiStackAt(list_slot).isList(), "Slot must hold a list.");
 
-        const elements = self.apiStackAt(listSlot).asList().elements;
+        const elements = self.apiStackAt(list_slot).asList().elements;
 
         const usedIndex = validateIndexPure(elements.count, index) orelse @panic("Index out of bounds.");
 
-        elements.rat(usedIndex).* = self.apiStackAt(elementSlot).*;
+        elements.rat(usedIndex).* = self.apiStackAt(element_slot).*;
     }
 
-    pub fn insertInList(self: *@This(), listSlot: usize, index: isize, elementSlot: usize) void {
-        self.validateApiSlot(listSlot);
-        self.validateApiSlot(elementSlot);
-        Utils.assert(self.apiStackAt(listSlot).isList(), "Must insert into a list.");
+    pub fn insertInList(self: *@This(), list_slot: usize, index: isize, element_slot: usize) void {
+        self.validateApiSlot(list_slot);
+        self.validateApiSlot(element_slot);
+        Utils.assert(self.apiStackAt(list_slot).isList(), "Must insert into a list.");
 
-        const list = self.apiStackAt(listSlot).asList();
+        const list = self.apiStackAt(list_slot).asList();
 
         // 负数索引从末尾开始计数.
         // 这里不使用validateIndex，因为insert允许比list.count大的索引.
@@ -742,7 +742,7 @@ pub const ZrenVM = struct {
 
         Utils.assert(i <= list.elements.count, "Index out of bounds.");
 
-        self.listInsert(list, self.apiStackAt(elementSlot).*, @intCast(i));
+        self.listInsert(list, self.apiStackAt(element_slot).*, @intCast(i));
     }
 
     pub fn getMapCount(self: *@This(), slot: usize) usize {
@@ -752,58 +752,58 @@ pub const ZrenVM = struct {
         return self.apiStackAt(slot).asMap().count();
     }
 
-    pub fn getMapContainsKey(self: *@This(), mapSlot: usize, keySlot: usize) bool {
-        self.validateApiSlot(mapSlot);
-        self.validateApiSlot(keySlot);
-        Utils.assert(self.apiStackAt(mapSlot).isMap(), "Slot must hold a map.");
+    pub fn getMapContainsKey(self: *@This(), map_slot: usize, key_slot: usize) bool {
+        self.validateApiSlot(map_slot);
+        self.validateApiSlot(key_slot);
+        Utils.assert(self.apiStackAt(map_slot).isMap(), "Slot must hold a map.");
 
-        const key = self.apiStackAt(keySlot).*;
+        const key = self.apiStackAt(key_slot).*;
         Utils.assert(key.isValidKey(), "Slot must hold a valid key.");
         if (!self.validateKey(key)) return false;
 
-        return self.apiStackAt(mapSlot).asMap().mapContains(key);
+        return self.apiStackAt(map_slot).asMap().mapContains(key);
     }
 
-    pub fn getMapValue(self: *@This(), mapSlot: usize, keySlot: usize, valueSlot: usize) void {
-        self.validateApiSlot(mapSlot);
-        self.validateApiSlot(keySlot);
-        self.validateApiSlot(valueSlot);
-        Utils.assert(self.apiStackAt(mapSlot).isMap(), "Slot must hold a map.");
+    pub fn getMapValue(self: *@This(), map_slot: usize, key_slot: usize, value_slot: usize) void {
+        self.validateApiSlot(map_slot);
+        self.validateApiSlot(key_slot);
+        self.validateApiSlot(value_slot);
+        Utils.assert(self.apiStackAt(map_slot).isMap(), "Slot must hold a map.");
 
-        const map = self.apiStackAt(mapSlot).asMap();
-        const key = self.apiStackAt(keySlot).*;
+        const map = self.apiStackAt(map_slot).asMap();
+        const key = self.apiStackAt(key_slot).*;
 
         const value = map.mapGet(key);
-        self.apiStackAt(valueSlot).* = if (value.isUndefined()) .NULL_VAL else value;
+        self.apiStackAt(value_slot).* = if (value.isUndefined()) .NULL_VAL else value;
     }
 
-    pub fn setMapValue(self: *@This(), mapSlot: usize, keySlot: usize, valueSlot: usize) void {
-        self.validateApiSlot(mapSlot);
-        self.validateApiSlot(keySlot);
-        self.validateApiSlot(valueSlot);
-        Utils.assert(self.apiStackAt(mapSlot).isMap(), "Must insert into a map.");
+    pub fn setMapValue(self: *@This(), map_slot: usize, key_slot: usize, value_slot: usize) void {
+        self.validateApiSlot(map_slot);
+        self.validateApiSlot(key_slot);
+        self.validateApiSlot(value_slot);
+        Utils.assert(self.apiStackAt(map_slot).isMap(), "Must insert into a map.");
 
-        const key = self.apiStackAt(keySlot).*;
+        const key = self.apiStackAt(key_slot).*;
         Utils.assert(key.isValidKey(), "Key must be a value type");
 
         if (!self.validateKey(key)) return;
 
-        var map = self.apiStackAt(mapSlot).asMap();
+        var map = self.apiStackAt(map_slot).asMap();
 
-        map.mapSet(key, self.apiStackAt(valueSlot).*);
+        map.mapSet(key, self.apiStackAt(value_slot).*);
     }
 
-    pub fn removeMapValue(self: *@This(), mapSlot: usize, keySlot: usize, removedValueSlot: usize) void {
-        self.validateApiSlot(mapSlot);
-        self.validateApiSlot(keySlot);
-        Utils.assert(self.apiStackAt(mapSlot).isMap(), "Slot must hold a map.");
+    pub fn removeMapValue(self: *@This(), map_slot: usize, key_slot: usize, removed_value_slot: usize) void {
+        self.validateApiSlot(map_slot);
+        self.validateApiSlot(key_slot);
+        Utils.assert(self.apiStackAt(map_slot).isMap(), "Slot must hold a map.");
 
-        const key = self.apiStackAt(keySlot).*;
+        const key = self.apiStackAt(key_slot).*;
         if (!self.validateKey(key)) return;
 
-        const map = self.apiStackAt(mapSlot).asMap();
+        const map = self.apiStackAt(map_slot).asMap();
         const removed = self.mapRemoveKey(map, key);
-        self.setSlot(removedValueSlot, removed);
+        self.setSlot(removed_value_slot, removed);
     }
 
     // 从module中获取变量[name], 将其存储在slot中.
@@ -897,7 +897,7 @@ pub const ZrenVM = struct {
         return value;
     }
 
-    pub fn newVM(cfg: ?ZrenConfiguration) *ZrenVM {
+    pub fn newVm(cfg: ?ZrenConfiguration) *ZrenVM {
         var config: ZrenConfiguration = cfg orelse .DEFAULT_CONFIG;
         config.allocator = config.allocator orelse std.heap.c_allocator;
         var vm = config.allocator.?.create(ZrenVM) catch unreachable;
@@ -919,12 +919,12 @@ pub const ZrenVM = struct {
         return vm;
     }
 
-    pub fn newList(self: *@This(), eleCount: usize) *ObjList {
+    pub fn newList(self: *@This(), ele_count: usize) *ObjList {
         const elements = ValueBuffer.init(self.allocator);
         var list = self.allocator.create(ObjList) catch unreachable;
         self.initObj(list.asObj(), .OBJ_LIST, self.listClass);
         list.elements = elements;
-        list.elements.resize(eleCount);
+        list.elements.resize(ele_count);
         return list;
     }
 
@@ -1004,7 +1004,7 @@ pub const ZrenVM = struct {
         return object;
     }
 
-    pub fn newFunction(self: *@This(), module: ?*ObjModule, maxSlots: usize) *ObjFunc {
+    pub fn newFunction(self: *@This(), module: ?*ObjModule, max_slots: usize) *ObjFunc {
         const source_lines = UsizeBuffer.init(self.allocator);
         const debug = self.allocator.create(FuncDebug) catch unreachable;
         debug.name = &.{};
@@ -1018,7 +1018,7 @@ pub const ZrenVM = struct {
         func.constants = constants;
         func.code = code;
         func.module = module;
-        func.maxSlots = maxSlots;
+        func.maxSlots = max_slots;
         func.numUpvalues = 0;
         func.arity = 0;
         func.debug = debug;
@@ -1315,12 +1315,12 @@ pub const ZrenVM = struct {
         return module;
     }
 
-    pub fn newRange(self: *@This(), from: f64, to: f64, isInclusive: bool) Value {
+    pub fn newRange(self: *@This(), from: f64, to: f64, is_inclusive: bool) Value {
         var range = self.allocator.create(ObjRange) catch unreachable;
         self.initObj(range.asObj(), .OBJ_RANGE, self.rangeClass);
         range.from = from;
         range.to = to;
-        range.isInclusive = isInclusive;
+        range.isInclusive = is_inclusive;
         return range.asObj().toVal();
     }
 
@@ -1667,15 +1667,15 @@ pub const ZrenVM = struct {
         if (num_fields == null) self.bindForeignClass(classObj, module);
     }
 
-    pub fn validateSuperclass(self: *@This(), name: *Value, superclassValue: *Value, num_fields: ?usize) Value {
+    pub fn validateSuperclass(self: *@This(), name: *Value, superclass_value: *Value, num_fields: ?usize) Value {
         // 确保父类是一个类
-        if (!superclassValue.isClass()) {
+        if (!superclass_value.isClass()) {
             return self.stringFormat("Class '@' cannot inherit from a non-class object.", .{name});
         }
 
         // 确保它不继承自一个密封的内置类型.
         // 这些类上的primitive 方法假定实例是其他 Obj___ 类型之一, 如果它实际上是 ObjInstance, 则将会失败
-        const superclass = superclassValue.asClass();
+        const superclass = superclass_value.asClass();
         if (superclass == self.classClass or
             superclass == self.fiberClass or
             superclass == self.fnClass or // 包含 OBJ_CLOSURE.
@@ -1708,11 +1708,11 @@ pub const ZrenVM = struct {
         return .NULL_VAL;
     }
 
-    pub fn bindSuperclass(self: *@This(), insubclass: ?*ObjClass, superclass: *ObjClass) void {
-        const subclass = insubclass orelse @panic("Must have superclass.");
-        subclass.super_class = superclass;
+    pub fn bindSuperclass(self: *@This(), subclass: ?*ObjClass, superclass: *ObjClass) void {
+        const sub_class = subclass orelse @panic("Must have superclass.");
+        sub_class.super_class = superclass;
         // 将superclass的num_fields加到总num_fields中
-        if (subclass.num_fields) |*num_fields| {
+        if (sub_class.num_fields) |*num_fields| {
             num_fields.* += superclass.num_fields.?;
         } else {
             Utils.assert(superclass.num_fields.? == 0, "A foreign class cannot inherit from a class with fields.");
@@ -1720,18 +1720,18 @@ pub const ZrenVM = struct {
 
         // 从父类继承方法
         for (0..superclass.methods.count) |i| {
-            self.bindMethod(subclass, i, superclass.methods.at(i));
+            self.bindMethod(sub_class, i, superclass.methods.at(i));
         }
     }
 
-    pub fn bindForeignClass(self: *@This(), classObj: *ObjClass, module: ?*ObjModule) void {
+    pub fn bindForeignClass(self: *@This(), class_obj: *ObjClass, module: ?*ObjModule) void {
         var methods: ZrenForeignClassMethods = .{};
         if (self.config.bindForeignClassFn) |bindForeignClassFn| {
-            methods = bindForeignClassFn(self, module.?.name.?.value, classObj.name.value) orelse .{};
+            methods = bindForeignClassFn(self, module.?.name.?.value, class_obj.name.value) orelse .{};
         }
         if (methods.allocate == null and methods.finalize == null) {
             if (std.mem.eql(u8, module.?.name.?.value, "random")) {
-                methods = self.randomBindForeignClass(module.?.name.?.value, classObj.name.value);
+                methods = self.randomBindForeignClass(module.?.name.?.value, class_obj.name.value);
             }
         }
 
@@ -1739,55 +1739,55 @@ pub const ZrenVM = struct {
         var symbol = self.symbolTableEnsure(&self.methodNames, "<allocate>");
         if (methods.allocate != null) {
             method.as = .{ .foreign = methods.allocate };
-            self.bindMethod(classObj, symbol, method);
+            self.bindMethod(class_obj, symbol, method);
         }
 
         symbol = self.symbolTableEnsure(&self.methodNames, "<finalize>");
         if (methods.finalize != null) {
             method.as = .{ .foreign = methods.finalize };
-            self.bindMethod(classObj, symbol, method);
+            self.bindMethod(class_obj, symbol, method);
         }
     }
 
-    pub fn gBindMethod(self: *@This(), methodType: OpCode, symbol: usize, module: *ObjModule, inClassObj: *ObjClass, methodValue: Value) void {
-        var classObj = inClassObj;
-        const className = classObj.name.value;
-        if (methodType == .CODE_METHOD_STATIC) classObj = classObj.asObj().class_obj;
+    pub fn gBindMethod(self: *@This(), method_type: OpCode, symbol: usize, module: *ObjModule, class_obj: *ObjClass, method_value: Value) void {
+        var class_obj_var = class_obj;
+        const class_name = class_obj_var.name.value;
+        if (method_type == .CODE_METHOD_STATIC) class_obj_var = class_obj_var.asObj().class_obj;
 
         var method: Method = .{};
-        if (methodValue.isString()) {
-            const name = methodValue.asString().value;
+        if (method_value.isString()) {
+            const name = method_value.asString().value;
             method.method_type = .METHOD_FOREIGN;
             const foreign = self.findForeignMethod(
                 module.name.?.value,
-                className,
-                methodType == .CODE_METHOD_STATIC,
+                class_name,
+                method_type == .CODE_METHOD_STATIC,
                 name,
             );
             method.as = .{ .foreign = foreign };
             if (method.as.foreign == null) {
-                self.fiber.?.err = self.stringFormat("Could not find foreign method '@' for class $ in module '$'.", .{ methodValue, classObj.name.value, module.name.?.value });
+                self.fiber.?.err = self.stringFormat("Could not find foreign method '@' for class $ in module '$'.", .{ method_value, class_obj_var.name.value, module.name.?.value });
                 return;
             }
         } else {
-            method.as = .{ .closure = methodValue.asClosure() };
+            method.as = .{ .closure = method_value.asClosure() };
             method.method_type = .METHOD_BLOCK;
             // 这里已经知道了superclass, 进行字节码填充
-            classObj.bindMethodCode(method.as.closure.func);
+            class_obj_var.bindMethodCode(method.as.closure.func);
         }
 
-        self.bindMethod(classObj, symbol, method);
+        self.bindMethod(class_obj_var, symbol, method);
     }
 
-    pub fn bindMethod(self: *@This(), classObj: *ObjClass, symbol: usize, method: Method) void {
+    pub fn bindMethod(self: *@This(), class_obj: *ObjClass, symbol: usize, method: Method) void {
         _ = self;
         // TODO 改进2: class的方法绑定时 symbol 都是从vm的methodNames中获取, 导致class自己的methods膨胀
         // TODO 这里可以改进
-        if (symbol >= classObj.methods.count) {
+        if (symbol >= class_obj.methods.count) {
             const noMethod: Method = .{ .method_type = .METHOD_NONE };
-            classObj.methods.fill(noMethod, symbol - classObj.methods.count + 1);
+            class_obj.methods.fill(noMethod, symbol - class_obj.methods.count + 1);
         }
-        classObj.methods.rat(symbol).* = method; // 指定写入到这个位置(symbol)
+        class_obj.methods.rat(symbol).* = method; // 指定写入到这个位置(symbol)
     }
 
     // 验证[value]是位于`[0, count)`的整数

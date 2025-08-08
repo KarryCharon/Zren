@@ -9,17 +9,16 @@ pub fn newVMBindMethod(signature: []const u8) ?VM.ZrenForeignMethodFn {
 }
 
 fn nullConfig(vm: *VM.ZrenVM) void {
-    var otherVM = VM.ZrenVM.newVM(null);
+    var otherVM = VM.ZrenVM.newVm(null);
+    defer otherVM.deinit();
 
     // 应当可以执行代码.
     const result = otherVM.interpret("main", "1 + 2");
     vm.setSlotBool(0, result == .RESULT_SUCCESS);
-
-    otherVM.freeVM();
 }
 
 fn multipleInterpretCalls(vm: *VM.ZrenVM) void {
-    var otherVM = VM.ZrenVM.newVM(null);
+    var otherVM = VM.ZrenVM.newVm(null);
     var result: VM.ZrenInterpretResult = undefined;
 
     var correct: bool = true;
