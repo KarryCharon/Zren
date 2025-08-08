@@ -1213,7 +1213,7 @@ pub const Compiler = struct {
     pub fn emitOp(self: *@This(), op: OpCode) void {
         _ = self.emitByte(op.num());
         // 保持追踪栈的峰值.
-        self.num_slots +%= @bitCast(C.StackEffects[op.num()]);
+        self.num_slots +%= @bitCast(C.StackEffects[op.num()].effect);
         if (self.num_slots > self.func.?.max_slots) self.func.?.max_slots = self.num_slots;
     }
 
