@@ -61,7 +61,7 @@ pub const C = struct {
     pub const EX_SOFTWARE: u8 = 70; //  运行时错误
     pub const EX_IOERR: u8 = 74; //     I/O 错误
 
-    // TODO 字节码的对应的栈槽数量. 该数组的索引是OpCode, 值是OpCode对应的栈槽数量.
+    // 字节码的对应的栈槽数量. 该数组的索引是OpCode, 值是OpCode对应的栈槽数量.
     pub const StackEffects = &[_]struct { code: OpCode, effect: isize }{
         .{ .code = .CODE_CONSTANT, .effect = 1 },
         .{ .code = .CODE_NULL, .effect = 1 },
