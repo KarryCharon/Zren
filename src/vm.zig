@@ -589,6 +589,7 @@ pub const ZrenVM = struct {
 
     // 确保[slot]是API的槽位堆栈中的有效索引.
     inline fn validateApiSlot(vm: *@This(), slot: usize) void {
+        _ = .{ vm, slot };
         Utils.assert(slot >= 0, "Slot cannot be negative.");
         Utils.assert(slot < vm.getSlotCount(), "Not that many slots.");
     }
@@ -1922,7 +1923,7 @@ pub const ZrenVM = struct {
     }
 
     pub fn randomBindForeignClass(self: *@This(), module: []const u8, class_name: []const u8) ZrenForeignClassMethods {
-        _ = .{ self, module };
+        _ = .{ self, module, class_name };
         Utils.assert(std.mem.eql(u8, class_name, "Random"), "Should be in Random class.");
         return .{ .allocate = randomAllocate };
     }
@@ -1977,7 +1978,7 @@ pub const ZrenVM = struct {
     }
 
     fn metaBindForeignMethod(self: *@This(), class_name: []const u8, is_static: bool, signature: []const u8) ?ZrenForeignMethodFn {
-        _ = self;
+        _ = .{ self, class_name, is_static };
         // 在meta模块中只有一个外部方法
         // TODO 这些assert 检查及相应的erro错误信息
         Utils.assert(std.mem.eql(u8, class_name, "Meta"), "Should be in Meta class.");
@@ -1994,7 +1995,7 @@ pub const ZrenVM = struct {
     }
 
     fn randomBindForeignMethod(self: *@This(), class_name: []const u8, is_static: bool, signature: []const u8) ?ZrenForeignMethodFn {
-        _ = .{ self, is_static };
+        _ = .{ self, class_name, is_static };
         Utils.assert(std.mem.eql(u8, class_name, "Random"), "Should be in Random class.");
         if (std.mem.eql(u8, signature, "<allocate>")) return randomAllocate;
         if (std.mem.eql(u8, signature, "seed_()")) return randomSeed0;
