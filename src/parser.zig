@@ -1367,7 +1367,7 @@ pub const Compiler = struct {
 
             if (self.constants == null) self.constants = self.parser.vm.newMap();
 
-            self.parser.vm.mapSet(self.constants.?, constant, Value.numToValue(@floatFromInt(func.constants.count - 1)));
+            self.constants.?.mapSet(constant, Value.numToValue(@floatFromInt(func.constants.count - 1)));
         } else {
             self.doError("A function may only contain {d} unique constants.", .{C.MAX_CONSTANTS});
         }
@@ -1375,7 +1375,7 @@ pub const Compiler = struct {
         return func.constants.count - 1;
     }
 
-    pub fn endCompiler(self: *@This(), debugName: []const u8) ?*ObjFunc {
+    pub fn endCompiler(self: *@This(), debug_name: []const u8) ?*ObjFunc {
         // 如果遇到错误, 不需要完成函数, 因为其已经被破坏.
         if (self.parser.has_error) {
             self.parser.vm.compiler = self.parent;
@@ -1383,7 +1383,7 @@ pub const Compiler = struct {
         }
         // 标记字节码的终止. 由于它可能包含多个早期return, 所以不能依赖CODE_RETURN来表示到达末尾.
         self.emitOp(.CODE_END);
-        self.parser.vm.functionBindName(self.func, debugName);
+        self.parser.vm.functionBindName(self.func, debug_name);
         if (self.parent) |p| {
             const constant = p.addConstant(self.func.?.asObj().toVal());
             p.emitShortArg(.CODE_CLOSURE, @intCast(constant.?));
@@ -1669,9 +1669,9 @@ pub const Compiler = struct {
         }
     }
 
-    pub fn callMethod(self: *@This(), numArgs: u8, name: []const u8) void {
+    pub fn callMethod(self: *@This(), num_args: u8, name: []const u8) void {
         const symbol: u16 = @intCast(self.methodSymbol(name));
-        self.emitShortArg(OpCode.CODE_CALL_0.poffset(numArgs), symbol);
+        self.emitShortArg(OpCode.CODE_CALL_0.poffset(num_args), symbol);
     }
 
     // 编译一个(可选)参数列表用于带有[methodSignature]的方法调用, 然后调用它.
@@ -1738,11 +1738,11 @@ pub const Compiler = struct {
 
     // 编译一个调用, 其名称是之前消费的token.
     // 其中包含getter, 带参方法调用和setter调用.
-    pub fn namedCall(self: *@This(), canAssign: bool, op: OpCode) void {
+    pub fn namedCall(self: *@This(), can_assign: bool, op: OpCode) void {
         // 为方法名获取token
         var signature = self.signatureFromToken(.SIG_GETTER);
 
-        if (canAssign and self.match(.TOKEN_EQ)) {
+        if (can_assign and self.match(.TOKEN_EQ)) {
             self.ignoreNewLines();
 
             // 构建setter签名.
@@ -1818,8 +1818,8 @@ pub const Compiler = struct {
     }
 
     // VM仅能处理一定数量的参数, 检查是否超限, 并给出错误信息.
-    pub fn validateNumParameters(self: *@This(), numArgs: u8) void {
-        if (numArgs == C.MAX_PARAMETERS + 1) {
+    pub fn validateNumParameters(self: *@This(), num_args: u8) void {
+        if (num_args == C.MAX_PARAMETERS + 1) {
             // 仅当参数正好是最大值加一时才显示错误, 这样可以继续解析参数并减少级联错误.
             self.doError("Methods cannot have more than {d} parameters.", .{C.MAX_PARAMETERS});
         }
@@ -1877,9 +1877,9 @@ pub const Compiler = struct {
     }
 
     // 编译对于 [variable] 的读取或赋值指令.
-    pub fn bareName(self: *@This(), canAssign: bool, variable: Variable) void {
+    pub fn bareName(self: *@This(), can_assign: bool, variable: Variable) void {
         // 如果在裸变量名后面有一个 "=" 则对应的是一个变量赋值.
-        if (canAssign and self.match(.TOKEN_EQ)) {
+        if (can_assign and self.match(.TOKEN_EQ)) {
             self.expression(); // 编译右边的表达式
             const arg: u8 = @intCast(variable.index); // TODO 类型改进
             // 编译存储指令.
@@ -1911,23 +1911,23 @@ pub const Compiler = struct {
         self.consume(.TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
     }
 
-    pub fn null_(self: *@This(), canAssign: bool) void {
-        _ = canAssign;
+    pub fn null_(self: *@This(), can_assign: bool) void {
+        _ = can_assign;
         self.emitOp(.CODE_NULL);
     }
 
-    pub fn literal(self: *Compiler, canAssign: bool) void {
-        _ = canAssign;
+    pub fn literal(self: *Compiler, can_assign: bool) void {
+        _ = can_assign;
         self.emitConstant(self.parser.prev.value);
     }
 
     // 编译变量名或带有隐式接收者的方法调用.
-    pub fn parseName(self: *Compiler, canAssign: bool) void {
+    pub fn parseName(self: *Compiler, can_assign: bool) void {
         // 在最近的封闭方法的作用域链中查找名称.
         const token = &self.parser.prev;
 
         if (self.resolveNonmodule(token.name())) |v| {
-            self.bareName(canAssign, v);
+            self.bareName(can_assign, v);
             return;
         }
 
@@ -1938,7 +1938,7 @@ pub const Compiler = struct {
         // 如果在方法中, 并且名称是小写的, 则将其视为this的方法.
         if (Utils.isLocalName(token.name()[0]) and self.getEnclosingClass() != null) {
             self.loadThis();
-            self.namedCall(canAssign, .CODE_CALL_0);
+            self.namedCall(can_assign, .CODE_CALL_0);
             return;
         }
 
@@ -1955,7 +1955,7 @@ pub const Compiler = struct {
             };
         }
 
-        self.bareName(canAssign, variable);
+        self.bareName(can_assign, variable);
     }
 
     fn forStatement(self: *@This()) void {
@@ -2005,11 +2005,11 @@ pub const Compiler = struct {
             self.doError("Cannot declare more than {d} variables in one scope. (Not enough space for for-loops internal variables)", .{C.MAX_LOCALS});
             return;
         }
-        const seqSlot: u8 = @intCast(self.addLocal("seq "));
+        const seq_slot: u8 = @intCast(self.addLocal("seq "));
 
         // 创建另外一个隐藏局部变量 用于迭代器对象.
         self.null_(false);
-        const iterSlot: u8 = @intCast(self.addLocal("iter "));
+        const iter_slot: u8 = @intCast(self.addLocal("iter "));
 
         self.consume(.TOKEN_RIGHT_PAREN, "Expect ')' after loop expression.");
 
@@ -2017,17 +2017,17 @@ pub const Compiler = struct {
         self.startLoop(&loop);
 
         // 通过调用.iterate方法在序列上前移迭代器.
-        self.loadLocal(seqSlot);
-        self.loadLocal(iterSlot);
+        self.loadLocal(seq_slot);
+        self.loadLocal(iter_slot);
 
         // 更新并测试迭代器.
         self.callMethod(1, "iterate(_)");
-        _ = self.emitByteArg(.CODE_STORE_LOCAL, iterSlot);
+        _ = self.emitByteArg(.CODE_STORE_LOCAL, iter_slot);
         self.testExitLoop();
 
         // 通过调用.iteratorValue获取序列中的当前值.
-        self.loadLocal(seqSlot);
-        self.loadLocal(iterSlot);
+        self.loadLocal(seq_slot);
+        self.loadLocal(iter_slot);
         self.callMethod(1, "iteratorValue(_)");
 
         // 在其自己的作用域中绑定循环变量.
@@ -2047,21 +2047,21 @@ pub const Compiler = struct {
         self.consume(.TOKEN_RIGHT_PAREN, "Expect ')' after if condition.");
 
         // 当condition为false时, 跳转到else分支.
-        const ifJump = self.emitJump(.CODE_JUMP_IF);
+        const if_jump = self.emitJump(.CODE_JUMP_IF);
 
         self.statement(); // 编译then分支
 
         // 如果有else分支, 则编译它.
         if (self.match(.TOKEN_ELSE)) {
             // 当if分支被采用时, 跳过else分支.
-            const elseJump = self.emitJump(.CODE_JUMP);
-            self.patchJump(ifJump);
+            const else_jump = self.emitJump(.CODE_JUMP);
+            self.patchJump(if_jump);
 
             self.statement();
 
-            self.patchJump(elseJump); // 填充elseJump
+            self.patchJump(else_jump); // 填充elseJump
         } else {
-            self.patchJump(ifJump);
+            self.patchJump(if_jump);
         }
     }
 

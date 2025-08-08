@@ -13,24 +13,24 @@ pub fn foreignClassBindMethod(signature: []const u8) ?VM.ZrenForeignMethodFn {
     return null;
 }
 
-pub fn foreignClassBindClass(className: []const u8, methods: *VM.ZrenForeignClassMethods) void {
-    if (std.mem.eql(u8, className, "Counter")) {
+pub fn foreignClassBindClass(class_name: []const u8, methods: *VM.ZrenForeignClassMethods) void {
+    if (std.mem.eql(u8, class_name, "Counter")) {
         methods.allocate = counterAllocate;
         return;
     }
 
-    if (std.mem.eql(u8, className, "Point")) {
+    if (std.mem.eql(u8, class_name, "Point")) {
         methods.allocate = pointAllocate;
         return;
     }
 
-    if (std.mem.eql(u8, className, "Resource")) {
+    if (std.mem.eql(u8, class_name, "Resource")) {
         methods.allocate = resourceAllocate;
         methods.finalize = resourceFinalize;
         return;
     }
 
-    if (std.mem.eql(u8, className, "BadClass")) {
+    if (std.mem.eql(u8, class_name, "BadClass")) {
         methods.allocate = badClassAllocate;
         return;
     }

@@ -15,8 +15,8 @@ pub fn slotsBindMethod(signature: []const u8) ?VM.ZrenForeignMethodFn {
     return null;
 }
 
-pub fn slotsBindClass(className: []const u8, methods: *VM.ZrenForeignClassMethods) void {
-    _ = className;
+pub fn slotsBindClass(class_name: []const u8, methods: *VM.ZrenForeignClassMethods) void {
+    _ = class_name;
     methods.allocate = foreignClassAllocate;
 }
 

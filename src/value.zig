@@ -873,8 +873,8 @@ pub const ObjFunc = struct {
         return @ptrCast(self);
     }
 
-    pub inline fn checkArity(self: *@This(), numArgs: u8) bool {
-        return numArgs - 1 >= self.arity;
+    pub inline fn checkArity(self: *@This(), num_args: u8) bool {
+        return num_args - 1 >= self.arity;
     }
 
     pub inline fn hashCode(self: *@This()) u64 {

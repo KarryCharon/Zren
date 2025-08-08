@@ -1,8 +1,8 @@
 const std = @import("std");
 const VM = @import("../vm.zig");
 
-pub fn resetStackAfterForeignConstructBindClass(className: []const u8, methods: *VM.ZrenForeignClassMethods) void {
-    if (std.mem.eql(u8, className, "ResetStackForeign")) {
+pub fn resetStackAfterForeignConstructBindClass(class_name: []const u8, methods: *VM.ZrenForeignClassMethods) void {
+    if (std.mem.eql(u8, class_name, "ResetStackForeign")) {
         methods.allocate = counterAllocate;
         return;
     }

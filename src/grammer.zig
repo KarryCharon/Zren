@@ -232,15 +232,15 @@ pub const rules: []const G = &.{
 // ----------------------------------------------------------------------------------------
 
 // 括号表达式.
-fn grouping(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn grouping(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     compiler.expression();
     compiler.consume(.TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
 // 列表字面量
-fn list(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn list(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
 
     // 初始化新列表
     compiler.loadCoreVariable("List");
@@ -262,8 +262,8 @@ fn list(compiler: *Compiler, canAssign: bool) void {
 }
 
 // 字典字面量
-fn map(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn map(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     // 初始化新字典
     compiler.loadCoreVariable("Map");
     compiler.callMethod(0, "new()");
@@ -290,20 +290,20 @@ fn map(compiler: *Compiler, canAssign: bool) void {
 }
 
 // 一元操作符, 如 `-foo`.
-fn unaryOp(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn unaryOp(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     const rule = &rules[compiler.parser.prev.token_type.num()];
     compiler.ignoreNewLines();
     compiler.parsePrecedence(Precedence.PREC_UNARY.poffset(1)); // 编译参数.
     compiler.callMethod(0, rule.name); // 对左侧调用操作符方法.
 }
 
-fn boolean(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn boolean(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     compiler.emitOp(if (compiler.parser.prev.token_type == .TOKEN_FALSE) .CODE_FALSE else .CODE_TRUE);
 }
 
-fn field(compiler: *Compiler, canAssign: bool) void {
+fn field(compiler: *Compiler, can_assign: bool) void {
     // 用假值初始化它, 这样就可以继续解析并尽量减少级联错误的数量.
     var f: usize = Constant.C.MAX_FIELDS; // TODO 这个 f 需要改进(类型)
 
@@ -325,25 +325,25 @@ fn field(compiler: *Compiler, canAssign: bool) void {
     }
 
     // 如果字段名后跟了一个 "=" 则是赋值操作.
-    var isLoad = true;
-    if (canAssign and compiler.match(.TOKEN_EQ)) {
+    var is_load = true;
+    if (can_assign and compiler.match(.TOKEN_EQ)) {
         // 编译右侧.
         compiler.expression();
-        isLoad = false;
+        is_load = false;
     }
 
     // 如果直接在方法内部, 则使用更优化的指令.
     if (compiler.parent != null and compiler.parent.?.enclosing_class == enclosing_class) {
-        _ = compiler.emitByteArg(if (isLoad) .CODE_LOAD_FIELD_THIS else .CODE_STORE_FIELD_THIS, @truncate(f));
+        _ = compiler.emitByteArg(if (is_load) .CODE_LOAD_FIELD_THIS else .CODE_STORE_FIELD_THIS, @truncate(f));
     } else {
         compiler.loadThis();
-        _ = compiler.emitByteArg(if (isLoad) .CODE_LOAD_FIELD else .CODE_STORE_FIELD, @truncate(f));
+        _ = compiler.emitByteArg(if (is_load) .CODE_LOAD_FIELD else .CODE_STORE_FIELD, @truncate(f));
     }
 
     compiler.allowLineBeforeDot();
 }
 
-fn staticField(compiler: *Compiler, canAssign: bool) void {
+fn staticField(compiler: *Compiler, can_assign: bool) void {
     var classCompiler = compiler.getEnclosingClassCompiler() orelse {
         compiler.doError("Cannot use a static field outside of a class definition.", .{});
         return;
@@ -364,29 +364,29 @@ fn staticField(compiler: *Compiler, canAssign: bool) void {
     // 到这里, 它肯定存在了, 所以能正确解析.
     // 这里和上面的 resolveLocal() 调用不同, 因为它可能已经被闭包捕获了.
     const variable = compiler.resolveName(token.name());
-    compiler.bareName(canAssign, variable);
+    compiler.bareName(can_assign, variable);
 }
 
 // 将变量名或方法调用与隐式接收者一起编译.
-fn name_(compiler: *Compiler, canAssign: bool) void {
-    compiler.parseName(canAssign);
+fn name_(compiler: *Compiler, can_assign: bool) void {
+    compiler.parseName(can_assign);
 }
 
-fn null_(compiler: *Compiler, canAssign: bool) void {
-    compiler.null_(canAssign);
+fn null_(compiler: *Compiler, can_assign: bool) void {
+    compiler.null_(can_assign);
 }
 
 // 数字或字符串字面量.
-fn literal(compiler: *Compiler, canAssign: bool) void {
-    compiler.literal(canAssign);
+fn literal(compiler: *Compiler, can_assign: bool) void {
+    compiler.literal(can_assign);
 }
 
 // 包含插值表达式的字符串字面量.
 // 插值表达式是语法糖, 等价 ".join()" 方法.
 // 因此, 字符串:  "a %(b + c) d"
 // 会被编译成:    ["a ", b + c, " d"].join()
-fn stringInterpolation(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn stringInterpolation(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     // 初始化新列表
     compiler.loadCoreVariable("List");
     compiler.callMethod(0, "new()");
@@ -414,7 +414,7 @@ fn stringInterpolation(compiler: *Compiler, canAssign: bool) void {
     compiler.callMethod(0, "join()");
 }
 
-fn super_(compiler: *Compiler, canAssign: bool) void {
+fn super_(compiler: *Compiler, can_assign: bool) void {
     const enclosing_class = compiler.getEnclosingClass();
     if (enclosing_class == null) {
         compiler.doError("Cannot use 'super' outside of a method.", .{});
@@ -429,7 +429,7 @@ fn super_(compiler: *Compiler, canAssign: bool) void {
     if (compiler.match(.TOKEN_DOT)) {
         // 编译 superclass call.
         compiler.consume(.TOKEN_NAME, "Expect method name after 'super.'.");
-        compiler.namedCall(canAssign, .CODE_SUPER_0);
+        compiler.namedCall(can_assign, .CODE_SUPER_0);
     } else if (enclosing_class) |e| {
         // 非显式名称, 所以使用封闭方法的名称.
         // 首先, 确保我们检查 enclosing_class 不是 NULL, 虽然已经报告了错误, 但这里不能崩溃.
@@ -437,8 +437,8 @@ fn super_(compiler: *Compiler, canAssign: bool) void {
     }
 }
 
-fn this_(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn this_(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     if (compiler.getEnclosingClass() == null) {
         compiler.doError("Cannot use 'this' outside of a method.", .{});
         return;
@@ -447,7 +447,7 @@ fn this_(compiler: *Compiler, canAssign: bool) void {
     compiler.loadThis();
 }
 
-fn subscript(compiler: *Compiler, canAssign: bool) void {
+fn subscript(compiler: *Compiler, can_assign: bool) void {
     var signature: Signature = .{
         .stype = .SIG_SUBSCRIPT,
         .arity = 0,
@@ -458,7 +458,7 @@ fn subscript(compiler: *Compiler, canAssign: bool) void {
 
     compiler.allowLineBeforeDot();
 
-    if (canAssign and compiler.match(.TOKEN_EQ)) {
+    if (can_assign and compiler.match(.TOKEN_EQ)) {
         signature.stype = .SIG_SUBSCRIPT_SETTER;
         signature.arity += 1;
         compiler.validateNumParameters(signature.arity);
@@ -468,14 +468,14 @@ fn subscript(compiler: *Compiler, canAssign: bool) void {
     compiler.callSignature(.CODE_CALL_0, &signature);
 }
 
-fn call(compiler: *Compiler, canAssign: bool) void {
+fn call(compiler: *Compiler, can_assign: bool) void {
     compiler.ignoreNewLines();
     compiler.consume(.TOKEN_NAME, "Expect method name after '.'.");
-    compiler.namedCall(canAssign, .CODE_CALL_0);
+    compiler.namedCall(can_assign, .CODE_CALL_0);
 }
 
-fn and_(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn and_(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     compiler.ignoreNewLines();
 
     // 如果左操作数为false, 则跳过右操作参数.
@@ -484,8 +484,8 @@ fn and_(compiler: *Compiler, canAssign: bool) void {
     compiler.patchJump(jump);
 }
 
-fn or_(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn or_(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     compiler.ignoreNewLines();
 
     // 当左操作数为true时, 跳过右操作数.
@@ -494,8 +494,8 @@ fn or_(compiler: *Compiler, canAssign: bool) void {
     compiler.patchJump(jump);
 }
 
-fn conditional(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn conditional(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     // 忽略'?'后的新行.
     compiler.ignoreNewLines();
 
@@ -520,8 +520,8 @@ fn conditional(compiler: *Compiler, canAssign: bool) void {
     compiler.patchJump(elseJump);
 }
 
-fn infixOp(compiler: *Compiler, canAssign: bool) void {
-    _ = canAssign;
+fn infixOp(compiler: *Compiler, can_assign: bool) void {
+    _ = can_assign;
     const rule = &rules[@intFromEnum(compiler.parser.prev.token_type)];
 
     // 中缀操作符不能终结表达式.

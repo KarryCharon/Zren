@@ -93,8 +93,8 @@ pub const ZrenType = enum {
 
 pub const ZrenResolveModuleFn = *const fn (vm: *ZrenVM, importer: []const u8, name: []const u8, buf: []u8) usize;
 pub const ZrenLoadModuleFn = *const fn (vm: *ZrenVM, name: []const u8) ZrenLoadModuleResult;
-pub const ZrenBindForeignMethodFn = *const fn (vm: *ZrenVM, module: []const u8, className: []const u8, isStatic: bool, signature: []const u8) ?ZrenForeignMethodFn;
-pub const ZrenBindForeignClassFn = *const fn (vm: *ZrenVM, module: []const u8, className: []const u8) ?ZrenForeignClassMethods;
+pub const ZrenBindForeignMethodFn = *const fn (vm: *ZrenVM, module: []const u8, class_name: []const u8, is_static: bool, signature: []const u8) ?ZrenForeignMethodFn;
+pub const ZrenBindForeignClassFn = *const fn (vm: *ZrenVM, module: []const u8, class_name: []const u8) ?ZrenForeignClassMethods;
 pub const ZrenWriteFn = *const fn (vm: *ZrenVM, []const u8) void;
 pub const ZrenErrorFn = *const fn (vm: *ZrenVM, errtype: ZrenErrorType, module: []const u8, line: ?usize, message: []const u8) void;
 
@@ -398,13 +398,13 @@ pub const ZrenVM = struct {
     }
 
     pub fn compileSource(self: *@This(), module: []const u8, source: []const u8, is_expression: bool, print_errors: bool) ?*ObjClosure {
-        var nameValue: Value = .NULL_VAL;
+        var name_val: Value = .NULL_VAL;
         if (module.len > 0) {
-            nameValue = self.newString(module);
-            self.pushRoot(nameValue.asObj());
+            name_val = self.newString(module);
+            self.pushRoot(name_val.asObj());
         }
 
-        const closure = self.compileInModule(&nameValue, source, is_expression, print_errors);
+        const closure = self.compileInModule(&name_val, source, is_expression, print_errors);
 
         if (module.len > 0) self.popRoot();
 
@@ -416,7 +416,7 @@ pub const ZrenVM = struct {
         if (module == null) {
             module = self.newModule(name.asString());
             self.pushRoot(module.?.asObj());
-            self.mapSet(self.modules, name.*, module.?.asObj().toVal());
+            self.modules.mapSet(name.*, module.?.asObj().toVal());
             self.popRoot();
             var coreModule = self.getModule(.NULL_VAL);
             for (0..coreModule.?.variables.count) |i| {
@@ -436,8 +436,8 @@ pub const ZrenVM = struct {
     }
 
     pub fn compile(self: *@This(), module: *ObjModule, source: []const u8, is_expression: bool, print_errors: bool) ?*ObjFunc {
-        const bomSize = Utils.bomSize(source);
-        const csource = source[bomSize..];
+        const bom_size = Utils.bomSize(source);
+        const csource = source[bom_size..];
 
         var parser: Parser = .{};
         parser.vm = self;
@@ -463,7 +463,7 @@ pub const ZrenVM = struct {
         parser.nextToken(); // 读取第一个token到 next
         parser.nextToken(); // 拷贝 next 到 curr
 
-        const numExistingVariables = module.variables.count;
+        const num_existing_vars = module.variables.count;
 
         var compiler = Compiler{};
         compiler.init(&parser, null, false);
@@ -487,7 +487,7 @@ pub const ZrenVM = struct {
 
         // 检查是否有隐式声明的模块级变量从未被显式定义.
         // 它们将具有表示变量首次被使用的行的数字值.
-        for (numExistingVariables..parser.module.variables.count) |i| {
+        for (num_existing_vars..parser.module.variables.count) |i| {
             var v = parser.module.variables.at(i);
             if (!v.isNum()) continue;
             parser.prev.token_type = .TOKEN_NAME;
@@ -667,10 +667,10 @@ pub const ZrenVM = struct {
         vm.validateApiSlot(class_slot);
         Utils.assert(vm.apiStackAt(class_slot).isClass(), "Slot must hold a class.");
 
-        const classObj = vm.apiStackAt(class_slot).asClass();
-        Utils.assert(classObj.num_fields == null, "Class must be a foreign class.");
+        const class_obj = vm.apiStackAt(class_slot).asClass();
+        Utils.assert(class_obj.num_fields == null, "Class must be a foreign class.");
 
-        const foreign = vm.newForeign(classObj, @sizeOf(T));
+        const foreign = vm.newForeign(class_obj, @sizeOf(T));
         vm.apiStackAt(slot).* = foreign.asObj().toVal();
         return foreign.cast(T);
     }
@@ -711,9 +711,9 @@ pub const ZrenVM = struct {
 
         const elements = self.apiStackAt(list_slot).asList().elements;
 
-        const usedIndex = validateIndexPure(elements.count, index) orelse @panic("Index out of bounds.");
+        const used_index = validateIndexPure(elements.count, index) orelse @panic("Index out of bounds.");
 
-        self.apiStackAt(element_slot).* = elements.rat(usedIndex).*;
+        self.apiStackAt(element_slot).* = elements.rat(used_index).*;
     }
 
     pub fn setListElement(self: *@This(), list_slot: usize, index: isize, element_slot: usize) void {
@@ -723,9 +723,9 @@ pub const ZrenVM = struct {
 
         const elements = self.apiStackAt(list_slot).asList().elements;
 
-        const usedIndex = validateIndexPure(elements.count, index) orelse @panic("Index out of bounds.");
+        const used_index = validateIndexPure(elements.count, index) orelse @panic("Index out of bounds.");
 
-        elements.rat(usedIndex).* = self.apiStackAt(element_slot).*;
+        elements.rat(used_index).* = self.apiStackAt(element_slot).*;
     }
 
     pub fn insertInList(self: *@This(), list_slot: usize, index: isize, element_slot: usize) void {
@@ -811,50 +811,50 @@ pub const ZrenVM = struct {
         Utils.assert(module.len != 0, "Module cannot be NULL.");
         Utils.assert(name.len != 0, "Variable name cannot be NULL.");
 
-        const moduleName = self.stringFormat("$", .{module});
-        self.pushRoot(moduleName.asObj());
+        const module_name = self.stringFormat("$", .{module});
+        self.pushRoot(module_name.asObj());
 
-        const moduleObj = self.getModule(moduleName) orelse @panic("Could not find module.");
+        const module_obj = self.getModule(module_name) orelse @panic("Could not find module.");
 
         self.popRoot();
-        const variableSlot = self.symbolTableFind(&moduleObj.variable_names, name) orelse @panic("Could not find variable.");
+        const variable_slot = self.symbolTableFind(&module_obj.variable_names, name) orelse @panic("Could not find variable.");
 
-        self.setSlot(slot, moduleObj.variables.at(variableSlot));
+        self.setSlot(slot, module_obj.variables.at(variable_slot));
     }
 
     pub fn hasVariable(self: *@This(), module: []const u8, name: []const u8) bool {
         Utils.assert(module.len != 0, "Module cannot be NULL.");
         Utils.assert(name.len != 0, "Variable name cannot be NULL.");
 
-        const moduleName = self.stringFormat("$", .{module});
-        self.pushRoot(moduleName.asObj());
+        const module_name = self.stringFormat("$", .{module});
+        self.pushRoot(module_name.asObj());
 
         // 这里不使用hasModule, 因为需要使用模块对象.
-        const moduleObj = self.getModule(moduleName) orelse @panic("Could not find module.");
+        const module_obj = self.getModule(module_name) orelse @panic("Could not find module.");
 
         self.popRoot();
 
-        const variableSlot = self.symbolTableFind(&moduleObj.variable_names, name);
+        const variable_slot = self.symbolTableFind(&module_obj.variable_names, name);
 
-        return variableSlot != null;
+        return variable_slot != null;
     }
 
     pub fn hasModule(self: *@This(), module: []const u8) bool {
         Utils.assert(module.len > 0, "Module cannot be NULL.");
 
-        const moduleName = self.stringFormat("$", .{module});
-        self.pushRoot(moduleName.asObj());
+        const module_name = self.stringFormat("$", .{module});
+        self.pushRoot(module_name.asObj());
 
-        const moduleObj = self.getModule(moduleName);
+        const module_obj = self.getModule(module_name);
 
         self.popRoot();
 
-        return moduleObj != null;
+        return module_obj != null;
     }
 
     // 通过 [name] 查找已加载的模块. 未找到时返回 null.
     pub fn getModule(self: *@This(), name: Value) ?*ObjModule {
-        var module_value: Value = self.mapGet(self.modules, name);
+        var module_value: Value = self.modules.mapGet(name);
         return if (!module_value.isUndefined()) module_value.asModule() else null;
     }
 
@@ -871,22 +871,14 @@ pub const ZrenVM = struct {
         self.config.user_data = data;
     }
 
-    // 用method not found 错误终止classObj的symbol方法.
-    fn methodNotFound(vm: *@This(), classObj: *ObjClass, symbol: usize) void {
-        vm.fiber.?.err = vm.stringFormat("@ does not implement '$'.", .{ classObj.name.asObj().toVal(), vm.method_names.at(symbol).value });
-    }
-
-    pub inline fn mapGet(_: *@This(), map: *ObjMap, key: Value) Value {
-        return map.mapGet(key);
-    }
-
-    pub inline fn mapSet(_: *@This(), map: *ObjMap, key: Value, value: Value) void {
-        map.mapSet(key, value);
+    // 用method not found 错误终止class_obj的symbol方法.
+    fn methodNotFound(vm: *@This(), class_obj: *ObjClass, symbol: usize) void {
+        vm.fiber.?.err = vm.stringFormat("@ does not implement '$'.", .{ class_obj.name.asObj().toVal(), vm.method_names.at(symbol).value });
     }
 
     pub fn mapRemoveKey(self: *@This(), map: *ObjMap, key: Value) Value {
         // TODO 不知道是否需要优化效率
-        const value = self.mapGet(map, key);
+        const value = map.mapGet(key);
         if (value.isUndefined()) return .NULL_VAL;
         if (value.isObj()) self.pushRoot(value.asObj());
 
@@ -966,9 +958,9 @@ pub const ZrenVM = struct {
         var frames = GenericBuffer(CallFrame).init(self.allocator);
         frames.resize(Constants.C.INITIAL_CALL_FRAMES);
 
-        const stackCapacity = if (closure) |c| Utils.powerOf2Ceil(c.func.max_slots + 1) else 1;
+        const stack_capacity = if (closure) |c| Utils.powerOf2Ceil(c.func.max_slots + 1) else 1;
         var stack = GenericStack(Value).init(self.allocator);
-        stack.resize(stackCapacity) catch unreachable;
+        stack.resize(stack_capacity) catch unreachable;
 
         const fiber = self.allocator.create(ObjFiber) catch unreachable;
         fiber.allocator = self.allocator;
@@ -995,11 +987,11 @@ pub const ZrenVM = struct {
         return fiber;
     }
 
-    pub fn newForeign(self: *@This(), classObj: *ObjClass, size: usize) *ObjForeign {
+    pub fn newForeign(self: *@This(), class_obj: *ObjClass, size: usize) *ObjForeign {
         const data = self.allocator.alloc(u8, size) catch unreachable;
         @memset(data, 0);
         const object = self.allocator.create(ObjForeign) catch unreachable;
-        self.initObj(object.asObj(), .OBJ_FOREIGN, classObj);
+        self.initObj(object.asObj(), .OBJ_FOREIGN, class_obj);
         object.data = data.ptr;
         return object;
     }
@@ -1101,8 +1093,8 @@ pub const ZrenVM = struct {
         return self.getClassInline(value);
     }
 
-    pub fn getModuleVar(self: *@This(), module: *ObjModule, variableName: *Value) Value {
-        if (self.symbolTableFind(&module.variable_names, variableName.asString().value)) |i| {
+    pub fn getModuleVar(self: *@This(), module: *ObjModule, var_name: *Value) Value {
+        if (self.symbolTableFind(&module.variable_names, var_name.asString().value)) |i| {
             return module.variables.at(i);
         }
         // const variableEntry = module.variable_names.index(variableName.asString());
@@ -1110,7 +1102,7 @@ pub const ZrenVM = struct {
         //     return module.variables.rat(i).*;
         // }
         var module_name = module.name.?;
-        self.fiber.?.err = self.stringFormat("Could not find a variable named '@' in module '@'.", .{ variableName, module_name.asObj().toVal() });
+        self.fiber.?.err = self.stringFormat("Could not find a variable named '@' in module '@'.", .{ var_name, module_name.asObj().toVal() });
         return Value.NULL_VAL;
     }
 
@@ -1135,10 +1127,8 @@ pub const ZrenVM = struct {
         // + 4 chars 科学计数的指数
         // + 1 char 用于终止符 "\0"
         // = 24
-        var buf = [_]u8{0} ** 256;
-        // TODO 这里可能有问题
+        var buf = [_]u8{0} ** 32;
         const rbuf = Utils.fmt.formatFloat14g(&buf, value) catch unreachable;
-        // const rbuf = std.fmt.bufPrint(&buf, "{d}", .{value}) catch unreachable;
         return self.newString(rbuf);
     }
 
@@ -1154,23 +1144,23 @@ pub const ZrenVM = struct {
 
     pub fn stringFormat(self: *@This(), comptime format: []const u8, args: anytype) Value {
         comptime var i: usize = 0;
-        var totalLength: usize = 0;
+        var total_len: usize = 0;
 
         inline for (format) |c| {
             switch (c) {
                 '$' => {
-                    totalLength += args[i].len;
+                    total_len += args[i].len;
                     i += 1;
                 },
                 '@' => {
-                    totalLength += args[i].asString().value.len;
+                    total_len += args[i].asString().value.len;
                     i += 1;
                 },
-                else => totalLength += 1,
+                else => total_len += 1,
             }
         }
 
-        const content = self.allocator.alloc(u8, totalLength) catch unreachable;
+        const content = self.allocator.alloc(u8, total_len) catch unreachable;
         defer self.allocator.free(content);
         i = 0;
         var s = content.ptr;
@@ -1218,10 +1208,10 @@ pub const ZrenVM = struct {
     fn finalizeForeign(self: *@This(), foreign: *ObjForeign) void {
         const symbol = self.symbolTableFind(&self.method_names, "<finalize>") orelse @panic("");
 
-        const classObj = foreign.asObj().class_obj;
-        if (symbol >= classObj.methods.count) return;
+        const class_obj = foreign.asObj().class_obj;
+        if (symbol >= class_obj.methods.count) return;
 
-        const method = classObj.methods.rat(symbol);
+        const method = class_obj.methods.rat(symbol);
         if (method.method_type == .METHOD_NONE) return;
 
         Utils.assert(method.method_type == .METHOD_FOREIGN, "Finalize method must be foreign.");
@@ -1248,8 +1238,8 @@ pub const ZrenVM = struct {
         }
 
         // 拷贝字符串到ObjString
-        const resName = vm.newString(resolved[0..len]);
-        return resName;
+        const res_name = vm.newString(resolved[0..len]);
+        return res_name;
     }
 
     pub fn importModule(self: *@This(), inNname: *Value) Value {
@@ -1277,24 +1267,22 @@ pub const ZrenVM = struct {
             return .NULL_VAL;
         }
 
-        const moduleCLosure = self.compileInModule(&name, result.source, false, true);
+        const module_closure = self.compileInModule(&name, result.source, false, true);
         // TODO result.source 释放 这里需要改进
         if (result.on_complete) |f| f(self, name.asString().value, result);
 
-        if (moduleCLosure == null) {
+        if (module_closure == null) {
             self.fiber.?.err = self.stringFormat("Could not compile module '@'.", .{name});
             return .NULL_VAL;
         }
 
-        return moduleCLosure.?.asObj().toVal();
+        return module_closure.?.asObj().toVal();
     }
 
     pub fn functionBindName(self: *@This(), func: ?*ObjFunc, name: []const u8) void {
         func.?.debug.name = self.allocator.alloc(u8, name.len + 1) catch unreachable;
         std.mem.copyForwards(u8, func.?.debug.name, name);
         func.?.debug.name[name.len] = '\x00';
-        // memcpy(fn->debug->name, name, length);
-        // fn->debug->name[length] = '\0';
     }
 
     pub fn newModule(self: *@This(), name: ?*ObjString) *ObjModule {
@@ -1356,40 +1344,40 @@ pub const ZrenVM = struct {
     }
 
     pub fn newClass(self: *@This(), superclass: *ObjClass, num_fields: ?usize, name: *ObjString) *ObjClass {
-        var metaclassName = self.stringFormat("@ metaclass", .{name.asObj()});
-        self.pushRoot(metaclassName.asObj());
+        var metaclass_name = self.stringFormat("@ metaclass", .{name.asObj()});
+        self.pushRoot(metaclass_name.asObj());
 
-        const metaclass = self.newSingleClass(0, metaclassName.asString());
+        const metaclass = self.newSingleClass(0, metaclass_name.asString());
 
         metaclass.asObj().class_obj = self.class_class;
         self.popRoot();
         self.pushRoot(metaclass.asObj());
         self.bindSuperclass(metaclass, self.class_class);
 
-        const classObj = self.newSingleClass(num_fields, name);
+        const class_obj = self.newSingleClass(num_fields, name);
 
-        self.pushRoot(classObj.asObj());
-        classObj.asObj().class_obj = metaclass;
-        self.bindSuperclass(classObj, superclass);
+        self.pushRoot(class_obj.asObj());
+        class_obj.asObj().class_obj = metaclass;
+        self.bindSuperclass(class_obj, superclass);
         self.popRoot();
         self.popRoot();
-        return classObj;
+        return class_obj;
     }
 
     pub fn newSingleClass(self: *@This(), num_fields: ?usize, name: *ObjString) *ObjClass {
         const methods = MethodBuffer.init(self.allocator);
-        var classObj = self.allocator.create(ObjClass) catch unreachable;
-        self.initObj(classObj.asObj(), .OBJ_CLASS, null);
-        classObj.super_class = null;
-        classObj.num_fields = num_fields;
-        classObj.name = name;
-        classObj.attributes = .NULL_VAL;
+        var class_obj = self.allocator.create(ObjClass) catch unreachable;
+        self.initObj(class_obj.asObj(), .OBJ_CLASS, null);
+        class_obj.super_class = null;
+        class_obj.num_fields = num_fields;
+        class_obj.name = name;
+        class_obj.attributes = .NULL_VAL;
 
-        self.pushRoot(classObj.asObj());
-        classObj.methods = methods;
+        self.pushRoot(class_obj.asObj());
+        class_obj.methods = methods;
         self.popRoot();
 
-        return classObj;
+        return class_obj;
     }
 
     pub fn newStringFromRange(self: *@This(), source: *ObjString, start: usize, count: usize, step: i32) Value {
@@ -1476,22 +1464,22 @@ pub const ZrenVM = struct {
         }
     }
 
-    fn blackenClass(self: *@This(), classObj: *ObjClass) void {
-        self.grayObj(classObj.asObj().class_obj.asObj()); // 元类
-        if (classObj.super_class) |sc| self.grayObj(sc.asObj()); // 超类
+    fn blackenClass(self: *@This(), class_obj: *ObjClass) void {
+        self.grayObj(class_obj.asObj().class_obj.asObj()); // 元类
+        if (class_obj.super_class) |sc| self.grayObj(sc.asObj()); // 超类
 
-        for (0..classObj.methods.count) |i| {
-            if (classObj.methods.rat(i).method_type == .METHOD_BLOCK) {
-                self.grayObj(classObj.methods.rat(i).as.closure.asObj());
+        for (0..class_obj.methods.count) |i| {
+            if (class_obj.methods.rat(i).method_type == .METHOD_BLOCK) {
+                self.grayObj(class_obj.methods.rat(i).as.closure.asObj());
             }
         }
 
-        self.grayObj(classObj.name.asObj());
-        if (!classObj.attributes.isNull()) self.grayObj(classObj.attributes.asObj());
+        self.grayObj(class_obj.name.asObj());
+        if (!class_obj.attributes.isNull()) self.grayObj(class_obj.attributes.asObj());
 
         // 保持追踪仍在使用的内存量
         self.bytes_allocated += @sizeOf(ObjClass);
-        self.bytes_allocated += classObj.methods.data.capacity * @sizeOf(Method);
+        self.bytes_allocated += class_obj.methods.data.capacity * @sizeOf(Method);
     }
 
     fn blackenClosure(self: *@This(), closure: *ObjClosure) void {
@@ -1624,15 +1612,15 @@ pub const ZrenVM = struct {
         self.bytes_allocated += @sizeOf(ObjUpvalue);
     }
 
-    pub fn createForeign(self: *@This(), fiber: *ObjFiber, classObj: *ObjClass) void {
-        Utils.assert(classObj.num_fields == null, "Class must be a foreign class.");
+    pub fn createForeign(self: *@This(), fiber: *ObjFiber, class_obj: *ObjClass) void {
+        Utils.assert(class_obj.num_fields == null, "Class must be a foreign class.");
         const find_symbol = self.symbolTableFind(&self.method_names, "<allocate>");
 
         const symbol = find_symbol orelse @panic("Should have defined <allocate> symbol.");
 
-        Utils.assert(classObj.methods.count > symbol, "Class should have allocator.");
+        Utils.assert(class_obj.methods.count > symbol, "Class should have allocator.");
 
-        const method = classObj.methods.rat(symbol);
+        const method = class_obj.methods.rat(symbol);
 
         Utils.assert(method.method_type == .METHOD_FOREIGN, "Allocator should be foreign.");
         Utils.assert(self.isApiStackNull(), "Cannot already be in foreign call.");
@@ -1660,11 +1648,11 @@ pub const ZrenVM = struct {
         fiber.err = self.validateSuperclass(name, superclass, num_fields);
         if (fiber.hasErr()) return;
 
-        const classObj = self.newClass(superclass.asClass(), num_fields, name.asString());
-        fiber.stack.peek(1).* = classObj.asObj().toVal();
+        const class_obj = self.newClass(superclass.asClass(), num_fields, name.asString());
+        fiber.stack.peek(1).* = class_obj.asObj().toVal();
 
         // 字段数为null, 说明是foreign class
-        if (num_fields == null) self.bindForeignClass(classObj, module);
+        if (num_fields == null) self.bindForeignClass(class_obj, module);
     }
 
     pub fn validateSuperclass(self: *@This(), name: *Value, superclass_value: *Value, num_fields: ?usize) Value {
@@ -1863,8 +1851,8 @@ pub const ZrenVM = struct {
         // 边界情况: 空range
         //     即便空列表, 也可使用list[0..-1] 和 list[0..list.count] 拷贝整个列表
         const len_f64: f64 = @floatFromInt(len.*);
-        const targetTo: f64 = if (range.is_inclusive) -1 else len_f64;
-        if (range.from == len_f64 and range.to == targetTo) {
+        const target_to: f64 = if (range.is_inclusive) -1 else len_f64;
+        if (range.from == len_f64 and range.to == target_to) {
             len.* = 0;
             return 0;
         }
@@ -1901,8 +1889,8 @@ pub const ZrenVM = struct {
     }
 
     pub fn symbolTableAdd(self: *@This(), symbols: *SymbolTable, name: []const u8) usize {
-        const nameValue = self.newString(name);
-        const symbol = nameValue.asString();
+        const name_val = self.newString(name);
+        const symbol = name_val.asString();
         self.pushRoot(&symbol.obj);
         symbols.push(symbol);
         self.popRoot();
@@ -1933,23 +1921,23 @@ pub const ZrenVM = struct {
         return null;
     }
 
-    pub fn randomBindForeignClass(self: *@This(), module: []const u8, className: []const u8) ZrenForeignClassMethods {
+    pub fn randomBindForeignClass(self: *@This(), module: []const u8, class_name: []const u8) ZrenForeignClassMethods {
         _ = .{ self, module };
-        Utils.assert(std.mem.eql(u8, className, "Random"), "Should be in Random class.");
+        Utils.assert(std.mem.eql(u8, class_name, "Random"), "Should be in Random class.");
         return .{ .allocate = randomAllocate };
     }
 
-    pub fn captureUpvalue(self: *@This(), fiber: *ObjFiber, local: *Value, localStackIndex: usize) *ObjUpvalue {
+    pub fn captureUpvalue(self: *@This(), fiber: *ObjFiber, local: *Value, local_stack_index: usize) *ObjUpvalue {
         if (fiber.open_upvalues == null) {
-            fiber.open_upvalues = self.newUpvalue(local, localStackIndex);
+            fiber.open_upvalues = self.newUpvalue(local, local_stack_index);
             return fiber.open_upvalues.?;
         }
-        var preUpvalue: ?*ObjUpvalue = null;
+        var pre_upvalue: ?*ObjUpvalue = null;
         var upvalue = fiber.open_upvalues;
         // 遍历到栈底, 直到找到先前存在的upvalue或传递到它应该在的位置
         while (upvalue) |uv| : (upvalue = uv.next) {
             if (@intFromPtr(uv.value) <= @intFromPtr(local)) break; // TODO 这里有问题
-            preUpvalue = uv;
+            pre_upvalue = uv;
         }
 
         // 为当前local找到已存在的upvalue
@@ -1957,43 +1945,43 @@ pub const ZrenVM = struct {
 
         // 这里已经是栈底了, 所以local一定没有upvalue.
         // 创建一个新的upvalue并插入到合适的位置, 以保持列表有序
-        const createdUpvalue = self.newUpvalue(local, localStackIndex);
-        if (preUpvalue) |prev| {
-            prev.next = createdUpvalue;
+        const created_upvalue = self.newUpvalue(local, local_stack_index);
+        if (pre_upvalue) |prev| {
+            prev.next = created_upvalue;
         } else {
             // 新的upvalue是列表中的第一个
-            fiber.open_upvalues = createdUpvalue;
+            fiber.open_upvalues = created_upvalue;
         }
-        createdUpvalue.next = upvalue;
-        return createdUpvalue;
+        created_upvalue.next = upvalue;
+        return created_upvalue;
     }
 
-    fn findForeignMethod(self: *@This(), moduleName: []const u8, className: []const u8, isStatic: bool, signature: []const u8) ?ZrenForeignMethodFn {
+    fn findForeignMethod(self: *@This(), module_name: []const u8, class_name: []const u8, is_static: bool, signature: []const u8) ?ZrenForeignMethodFn {
         var method: ?ZrenForeignMethodFn = null;
 
         if (self.config.bindForeignMethodFn) |bfn| {
-            method = bfn(self, moduleName, className, isStatic, signature);
+            method = bfn(self, module_name, class_name, is_static, signature);
         }
 
         // 如果host没有提供, 检查是否是可选的
         if (method == null) {
-            if (std.mem.eql(u8, moduleName, "meta")) {
-                method = self.metaBindForeignMethod(className, isStatic, signature);
+            if (std.mem.eql(u8, module_name, "meta")) {
+                method = self.metaBindForeignMethod(class_name, is_static, signature);
             }
-            if (std.mem.eql(u8, moduleName, "random")) {
-                method = self.randomBindForeignMethod(className, isStatic, signature);
+            if (std.mem.eql(u8, module_name, "random")) {
+                method = self.randomBindForeignMethod(class_name, is_static, signature);
             }
         }
 
         return method;
     }
 
-    fn metaBindForeignMethod(self: *@This(), className: []const u8, isStatic: bool, signature: []const u8) ?ZrenForeignMethodFn {
+    fn metaBindForeignMethod(self: *@This(), class_name: []const u8, is_static: bool, signature: []const u8) ?ZrenForeignMethodFn {
         _ = self;
         // 在meta模块中只有一个外部方法
         // TODO 这些assert 检查及相应的erro错误信息
-        Utils.assert(std.mem.eql(u8, className, "Meta"), "Should be in Meta class.");
-        Utils.assert(isStatic, "Should be static.");
+        Utils.assert(std.mem.eql(u8, class_name, "Meta"), "Should be in Meta class.");
+        Utils.assert(is_static, "Should be static.");
 
         if (std.mem.eql(u8, signature, "compile_(_,_,_)")) {
             return metaCompile;
@@ -2005,9 +1993,9 @@ pub const ZrenVM = struct {
         return null;
     }
 
-    fn randomBindForeignMethod(self: *@This(), className: []const u8, isStatic: bool, signature: []const u8) ?ZrenForeignMethodFn {
-        _ = .{ self, isStatic };
-        Utils.assert(std.mem.eql(u8, className, "Random"), "Should be in Random class.");
+    fn randomBindForeignMethod(self: *@This(), class_name: []const u8, is_static: bool, signature: []const u8) ?ZrenForeignMethodFn {
+        _ = .{ self, is_static };
+        Utils.assert(std.mem.eql(u8, class_name, "Random"), "Should be in Random class.");
         if (std.mem.eql(u8, signature, "<allocate>")) return randomAllocate;
         if (std.mem.eql(u8, signature, "seed_()")) return randomSeed0;
         if (std.mem.eql(u8, signature, "seed_(_)")) return randomSeed1;
@@ -2026,10 +2014,10 @@ pub const ZrenVM = struct {
         // 查找调用点周围的模块.
         // -2 会沿着调用栈向上移动，假设meta模块在到达用户代码之前有一个间接层级.
         // 对meta的任意修改都可能需要调整这个常量.
-        const currentFiber = vm.fiber orelse return;
+        const curr_fiber = vm.fiber orelse return;
 
         // TODO 对齐c++实现
-        const func = currentFiber.frames[currentFiber.num_frames - 2].closure.func;
+        const func = curr_fiber.frames[curr_fiber.num_frames - 2].closure.func;
         const module = func.module.?.name;
         const closure = vm.compileSource(module.?.value, source, is_expression, print_errors);
         vm.apiStackAt(0).* = if (closure) |c| c.asObj().toVal() else .NULL_VAL;
@@ -2079,9 +2067,9 @@ pub const ZrenVM = struct {
         if (fiber.stack.buffer.len >= needed) return;
         const capacity = Utils.powerOf2Ceil(needed);
 
-        const oldStack = fiber.stack.buffer.ptr;
+        const old_stack = fiber.stack.buffer.ptr;
         fiber.stack.resize(capacity) catch unreachable;
-        if (@intFromPtr(&fiber.stack.buffer.ptr) == @intFromPtr(oldStack)) return;
+        if (@intFromPtr(&fiber.stack.buffer.ptr) == @intFromPtr(old_stack)) return;
         self.setApiStackOnly(fiber.stack.buffer[0..]);
         fiber.remapFrames();
         fiber.remapUpvalues();
@@ -2109,10 +2097,10 @@ pub const ZrenVM = struct {
         return &self.api_stack[self.api_stack_offset + index];
     }
 
-    pub inline fn completeCall(self: *@This(), numArgs: u8, symbol: u16, args: []Value, classObj: *ObjClass) bool {
-        const m = classObj.methods.rat(symbol);
-        if (symbol >= classObj.methods.count or m.method_type == .METHOD_NONE) {
-            self.methodNotFound(classObj, symbol);
+    pub inline fn completeCall(self: *@This(), num_args: u8, symbol: u16, args: []Value, class_obj: *ObjClass) bool {
+        const m = class_obj.methods.rat(symbol);
+        if (symbol >= class_obj.methods.count or m.method_type == .METHOD_NONE) {
+            self.methodNotFound(class_obj, symbol);
             self.throwErr();
             return false;
         }
@@ -2120,7 +2108,7 @@ pub const ZrenVM = struct {
         switch (m.method_type) {
             .METHOD_PRIMITIVE => {
                 if (m.as.primitive(self, args)) {
-                    self.fiber.?.stack.nOffset(numArgs - 1); // 返回结果在第一个参数位置, 丢弃其他栈槽
+                    self.fiber.?.stack.nOffset(num_args - 1); // 返回结果在第一个参数位置, 丢弃其他栈槽
                 } else {
                     const fiber = self.fiber orelse return true;
                     if (fiber.hasErr()) {
@@ -2132,7 +2120,7 @@ pub const ZrenVM = struct {
             },
             .METHOD_FUNCTION_CALL => {
                 const fiber = self.fiber orelse return false;
-                if (args[0].asClosure().func.checkArity(numArgs)) {
+                if (args[0].asClosure().func.checkArity(num_args)) {
                     _ = m.as.primitive(self, args);
                     fiber.loadFrame();
                 } else {
@@ -2142,11 +2130,11 @@ pub const ZrenVM = struct {
                 if (fiber.hasErr()) self.throwErr();
             },
             .METHOD_FOREIGN => {
-                self.callForeign(m.as.foreign.?, numArgs);
+                self.callForeign(m.as.foreign.?, num_args);
                 if (self.fiber.?.hasErr()) self.throwErr();
             },
             .METHOD_BLOCK => {
-                self.callFunction(m.as.closure, numArgs);
+                self.callFunction(m.as.closure, num_args);
                 self.fiber.?.loadFrame();
             },
             .METHOD_NONE => unreachable,
@@ -2208,8 +2196,8 @@ pub const ZrenVM = struct {
 
     pub fn dumpInstruction(self: *@This(), func: *ObjFunc, i: usize, last_line: ?*usize) isize {
         const start = i;
-        var iterWrap = func.code.iterWrap(i);
-        const code: OpCode = @enumFromInt(iterWrap.rbyte());
+        var iter_wrap = func.code.iterWrap(i);
+        const code: OpCode = @enumFromInt(iter_wrap.rbyte());
 
         const line = func.debug.source_lines.at(i);
         if (last_line == null or line != last_line.?.*) {
@@ -2223,7 +2211,7 @@ pub const ZrenVM = struct {
 
         switch (code) {
             .CODE_CONSTANT => {
-                const constant = iterWrap.rshort();
+                const constant = iter_wrap.rshort();
                 print("{s} {d:>5} '", .{ @tagName(code), constant });
                 func.constants.rat(constant).dumpVal();
                 print("'\n", .{});
@@ -2246,12 +2234,12 @@ pub const ZrenVM = struct {
             .CODE_STORE_LOCAL,
             .CODE_LOAD_UPVALUE,
             .CODE_STORE_UPVALUE,
-            => print("{s} {d:>5}\n", .{ @tagName(code), iterWrap.rbyte() }),
+            => print("{s} {d:>5}\n", .{ @tagName(code), iter_wrap.rbyte() }),
 
             .CODE_LOAD_MODULE_VAR,
             .CODE_STORE_MODULE_VAR,
             => {
-                const slot = iterWrap.rshort();
+                const slot = iter_wrap.rshort();
                 print("{s} {d:>5} '{s}'\n", .{ @tagName(code), slot, func.module.?.variable_names.rat(slot).value });
             },
 
@@ -2259,7 +2247,7 @@ pub const ZrenVM = struct {
             .CODE_STORE_FIELD_THIS,
             .CODE_LOAD_FIELD,
             .CODE_STORE_FIELD,
-            => print("{s} {d:>5}\n", .{ @tagName(code), iterWrap.rbyte() }),
+            => print("{s} {d:>5}\n", .{ @tagName(code), iter_wrap.rbyte() }),
 
             .CODE_POP => print("{s}\n", .{@tagName(code)}),
 
@@ -2281,7 +2269,7 @@ pub const ZrenVM = struct {
             .CODE_CALL_15,
             .CODE_CALL_16,
             => {
-                const symbol = iterWrap.rshort();
+                const symbol = iter_wrap.rshort();
                 print("{s} {d:>5} '{s}'\n", .{ @tagName(code), symbol, self.method_names.at(symbol).value });
             },
 
@@ -2303,8 +2291,8 @@ pub const ZrenVM = struct {
             .CODE_SUPER_15,
             .CODE_SUPER_16,
             => {
-                const symbol = iterWrap.rshort();
-                const superclass = iterWrap.rshort();
+                const symbol = iter_wrap.rshort();
+                const superclass = iter_wrap.rshort();
                 print("{s} {d:>5} '{s}' {d:>5}\n", .{ @tagName(code), symbol, self.method_names.at(symbol).value, superclass });
             },
 
@@ -2313,13 +2301,13 @@ pub const ZrenVM = struct {
             .CODE_AND,
             .CODE_OR,
             => {
-                const offset = iterWrap.rshort();
-                print("{s} {d:>5} to {d}\n", .{ @tagName(code), offset, iterWrap.pos + offset });
+                const offset = iter_wrap.rshort();
+                print("{s} {d:>5} to {d}\n", .{ @tagName(code), offset, iter_wrap.pos + offset });
             },
 
             .CODE_LOOP => {
-                const offset = iterWrap.rshort();
-                print("{s} {d:>5} to {d}\n", .{ @tagName(code), offset, iterWrap.pos - offset });
+                const offset = iter_wrap.rshort();
+                print("{s} {d:>5} to {d}\n", .{ @tagName(code), offset, iter_wrap.pos - offset });
             },
 
             .CODE_CLOSE_UPVALUE,
@@ -2327,14 +2315,14 @@ pub const ZrenVM = struct {
             => print("{s}\n", .{@tagName(code)}),
 
             .CODE_CLOSURE => {
-                const constant = iterWrap.rshort();
+                const constant = iter_wrap.rshort();
                 print("{s} {d:>5} ", .{ @tagName(code), constant });
                 func.constants.rat(constant).dumpVal();
                 print(" ", .{});
                 const loaded_func = func.constants.rat(constant).asObj().asFunc();
                 for (0..loaded_func.num_upvalues) |j| {
-                    const is_local = iterWrap.rbyte();
-                    const index = iterWrap.rbyte();
+                    const is_local = iter_wrap.rbyte();
+                    const index = iter_wrap.rbyte();
                     if (j > 0) print(", ", .{});
                     print("{s} {d}", .{ if (is_local != 0) "local" else "upvalue", index });
                 }
@@ -2346,7 +2334,7 @@ pub const ZrenVM = struct {
             => print("{s}\n", .{@tagName(code)}),
 
             .CODE_CLASS => {
-                const numFields = iterWrap.rbyte();
+                const numFields = iter_wrap.rbyte();
                 print("{s} {d:>5}\n", .{ @tagName(code), numFields });
             },
 
@@ -2357,7 +2345,7 @@ pub const ZrenVM = struct {
             .CODE_METHOD_INSTANCE,
             .CODE_METHOD_STATIC,
             => {
-                const symbol = iterWrap.rshort();
+                const symbol = iter_wrap.rshort();
                 print("{s} {d:>5} '{s}'\n", .{ @tagName(code), symbol, self.method_names.at(symbol).value });
             },
 
@@ -2366,7 +2354,7 @@ pub const ZrenVM = struct {
             .CODE_IMPORT_MODULE,
             .CODE_IMPORT_VARIABLE,
             => {
-                const name = iterWrap.rshort();
+                const name = iter_wrap.rshort();
                 print("{s} {} '", .{ @tagName(code), name });
                 func.constants.rat(name).dumpVal();
                 print("'\n", .{});
@@ -2376,46 +2364,46 @@ pub const ZrenVM = struct {
         }
 
         if (code == .CODE_END) return -1;
-        return @intCast(iterWrap.pos - start);
+        return @intCast(iter_wrap.pos - start);
     }
 
     fn initializeCore(self: *@This()) void {
-        const coreModule = self.newModule(null);
-        self.pushRoot(coreModule.asObj());
+        const core_module = self.newModule(null);
+        self.pushRoot(core_module.asObj());
         // 核心模块的key在模块map中为null
-        self.mapSet(self.modules, .NULL_VAL, coreModule.asObj().toVal());
+        self.modules.mapSet(.NULL_VAL, core_module.asObj().toVal());
         self.popRoot();
 
         // 定义root Object类. 这个类没有父类, 所以需要特殊处理.
-        ObjectModule._install(self, coreModule);
+        ObjectModule._install(self, core_module);
 
         // 现在, 我们可以定义Class, 它是Object的子类.
-        ClassModule._install(self, coreModule);
+        ClassModule._install(self, core_module);
 
         // 最后, 定义 Object 的元类, 它是 Class 的子类.
-        MetaClassModule._install(self, coreModule);
+        MetaClassModule._install(self, core_module);
         // 剩余的类, 可以正常定义.
         _ = self.interpret(&.{}, Constants.coreModuleSource);
 
-        BoolModule._install(self, coreModule);
+        BoolModule._install(self, core_module);
 
-        FiberModule._install(self, coreModule);
+        FiberModule._install(self, core_module);
 
-        FuncModule._install(self, coreModule);
+        FuncModule._install(self, core_module);
 
-        NullModule._install(self, coreModule);
+        NullModule._install(self, core_module);
 
-        NumModule._install(self, coreModule);
+        NumModule._install(self, core_module);
 
-        StringModule._install(self, coreModule);
+        StringModule._install(self, core_module);
 
-        ListModule._install(self, coreModule);
+        ListModule._install(self, core_module);
 
-        MapModule._install(self, coreModule);
+        MapModule._install(self, core_module);
 
-        RangeModule._install(self, coreModule);
+        RangeModule._install(self, core_module);
 
-        SystemModule._install(self, coreModule);
+        SystemModule._install(self, core_module);
 
         // 当引导核心类型并运行核心模块时，已经创建了大量的字符串对象，其中许多对象在 stringClass 存储在 VM 之前就已经实例化.
         // 其中一些 *必须* 首先创建——字符串本身的 ObjClass 对象有一个指向其名称的 ObjString 对象的引用.
@@ -2453,13 +2441,13 @@ pub const ZrenVM = struct {
         return self.runInterpreter(fiber);
     }
 
-    pub fn runFiber(self: *@This(), fiber: *ObjFiber, args: []Value, isCall: bool, hasValue: bool, comptime verb: []const u8) bool {
+    pub fn runFiber(self: *@This(), fiber: *ObjFiber, args: []Value, is_call: bool, has_value: bool, comptime verb: []const u8) bool {
         if (fiber.hasErr()) {
             self.fiber.?.err = self.stringFormat("Cannot $ an aborted fiber.", .{verb});
             return false;
         }
 
-        if (isCall) {
+        if (is_call) {
             // 无法调用已经调用的fiber, 但可以直接transfer到它, 所以这里要检查在`isCall`上运行.
             // 这样, 在恢复一个挂起的fiber后, 它将运行并返回到调用它的fiber, 以此类推.
 
@@ -2483,15 +2471,15 @@ pub const ZrenVM = struct {
 
         // 当正在调用的fiber恢复时，将把调用的结果存储在其堆栈中.
         // 如果调用有两个参数（fiber和值），我们只需要一个用于结果的槽位，所以现在丢弃另一个槽位.
-        if (hasValue) self.fiber.?.stack.nOffset(1);
+        if (has_value) self.fiber.?.stack.nOffset(1);
 
         if (fiber.num_frames == 1 and fiber.frames[0].ip_offset == 0) {
             // 当前fiber第一次被调用, 绑定参数.
             if (fiber.frames[0].closure.func.arity == 1) {
-                fiber.push(if (hasValue) args[1] else .NULL_VAL);
+                fiber.push(if (has_value) args[1] else .NULL_VAL);
             }
         } else {
-            fiber.peek(1).* = if (hasValue) args[1] else .NULL_VAL;
+            fiber.peek(1).* = if (has_value) args[1] else .NULL_VAL;
         }
 
         self.fiber = fiber;
@@ -2519,10 +2507,10 @@ pub const ZrenVM = struct {
         self.fiber = ifiber;
 
         // ----------------call阶段使用的----------------
-        var numArgs: u8 = 0;
+        var num_args: u8 = 0;
         var symbol: u16 = 0;
         var args: []Value = undefined;
-        var classObj: *ObjClass = undefined;
+        var class_obj: *ObjClass = undefined;
         // ----------------------------------------------
         const CODE_LOAD_LOCAL_0 = OpCode.CODE_LOAD_LOCAL_0.num();
         const CODE_CALL_0 = OpCode.CODE_CALL_0.num();
@@ -2592,11 +2580,11 @@ pub const ZrenVM = struct {
                 .CODE_CALL_15,
                 .CODE_CALL_16,
                 => {
-                    numArgs = inst - CODE_CALL_0 + 1;
+                    num_args = inst - CODE_CALL_0 + 1;
                     symbol = fiber.frame.rshort();
-                    args = fiber.stack.topNegSlice(numArgs);
-                    classObj = self.getClassInline(args[0]).?;
-                    if (self.completeCall(numArgs, symbol, args, classObj)) {
+                    args = fiber.stack.topNegSlice(num_args);
+                    class_obj = self.getClassInline(args[0]).?;
+                    if (self.completeCall(num_args, symbol, args, class_obj)) {
                         return .RESULT_SUCCESS;
                     }
                 },
@@ -2619,11 +2607,11 @@ pub const ZrenVM = struct {
                 .CODE_SUPER_15,
                 .CODE_SUPER_16,
                 => {
-                    numArgs = inst - CODE_SUPER_0 + 1;
+                    num_args = inst - CODE_SUPER_0 + 1;
                     symbol = fiber.frame.rshort();
-                    args = fiber.stack.topNegSlice(numArgs);
-                    classObj = fiber.frame.readConstant(fiber.frame.rshort()).asClass();
-                    if (self.completeCall(numArgs, symbol, args, classObj)) {
+                    args = fiber.stack.topNegSlice(num_args);
+                    class_obj = fiber.frame.readConstant(fiber.frame.rshort()).asClass();
+                    if (self.completeCall(num_args, symbol, args, class_obj)) {
                         return .RESULT_SUCCESS;
                     }
                 },
@@ -2752,8 +2740,8 @@ pub const ZrenVM = struct {
                 .CODE_METHOD_STATIC,
                 => {
                     symbol = fiber.frame.rshort();
-                    classObj = fiber.peek(1).asClass();
-                    self.gBindMethod(op, symbol, fiber.frame.closure.func.module.?, classObj, fiber.peek(2).*);
+                    class_obj = fiber.peek(1).asClass();
+                    self.gBindMethod(op, symbol, fiber.frame.closure.func.module.?, class_obj, fiber.peek(2).*);
                     if (fiber.hasErr()) {
                         self.throwErr();
                         break;
@@ -2878,14 +2866,14 @@ pub const ZrenVM = struct {
     }
 
     fn defineClass(self: *@This(), module: *ObjModule, name: []const u8) *ObjClass {
-        const nameString = self.newString(name).asString();
-        self.pushRoot(nameString.asObj());
+        const name_string = self.newString(name).asString();
+        self.pushRoot(name_string.asObj());
 
-        const classObj = self.newSingleClass(0, nameString);
-        _ = self.defineVariable(module, name, &classObj.asObj().toVal(), null);
+        const class_obj = self.newSingleClass(0, name_string);
+        _ = self.defineVariable(module, name, &class_obj.asObj().toVal(), null);
 
         self.popRoot();
-        return classObj;
+        return class_obj;
     }
 
     // 绑定一个使用Zig函数[func]实现的名为[name]（在Zren中）的primitive方法到`ObjClass`[cls].
@@ -2942,16 +2930,16 @@ pub const ObjectModule = struct {
             return false;
         }
 
-        var classObj = vm.getClass(args[0]);
-        const baseClassObj = args[1].asClass();
+        var class_obj = vm.getClass(args[0]);
+        const baseclass_obj = args[1].asClass();
 
-        while (classObj) |clsObj| {
-            if (@intFromPtr(baseClassObj) == @intFromPtr(clsObj)) {
+        while (class_obj) |clsObj| {
+            if (@intFromPtr(baseclass_obj) == @intFromPtr(clsObj)) {
                 args[0] = .TRUE_VAL;
                 return true;
             }
 
-            classObj = clsObj.super_class;
+            class_obj = clsObj.super_class;
         }
         args[0] = .FALSE_VAL;
         return true;
@@ -3007,16 +2995,16 @@ pub const ClassModule = struct {
 
 pub const MetaClassModule = struct {
     pub fn _install(vm: *ZrenVM, module: *ObjModule) void {
-        const objectMetaclass = vm.defineClass(module, "Object metaclass");
+        const object_metaclass = vm.defineClass(module, "Object metaclass");
 
         // 到这里所有的三个类已经定义了, 连接元类关系.
-        vm.object_class.asObj().class_obj = objectMetaclass;
-        objectMetaclass.asObj().class_obj = vm.class_class;
+        vm.object_class.asObj().class_obj = object_metaclass;
+        object_metaclass.asObj().class_obj = vm.class_class;
         vm.class_class.asObj().class_obj = vm.class_class;
 
         // 在连接元类之后执行此操作，以便 objectMetaclass 不会被gc.
-        vm.bindSuperclass(objectMetaclass, vm.class_class);
-        vm.primitive(objectMetaclass, "same(_,_)", objectSame);
+        vm.bindSuperclass(object_metaclass, vm.class_class);
+        vm.primitive(object_metaclass, "same(_,_)", objectSame);
 
         // 核心类图最终看起来像这样，其中单线指向类的超类，双线指向其元类：
         //
@@ -3164,8 +3152,8 @@ pub const FiberModule = struct {
 
     pub fn fiberIsDone(vm: *ZrenVM, args: []Value) bool {
         _ = vm;
-        const runFiber = args[0].asFiber();
-        args[0] = if (runFiber.isDone()) .TRUE_VAL else .FALSE_VAL;
+        const run_fiber = args[0].asFiber();
+        args[0] = if (run_fiber.isDone()) .TRUE_VAL else .FALSE_VAL;
         return true;
     }
 
@@ -3346,8 +3334,8 @@ pub const NumModule = struct {
             return true;
         }
         // 解析字符串为数字
-        const stripStr = std.mem.trim(u8, string.value, " ");
-        const num = std.fmt.parseFloat(f64, stripStr) catch {
+        const strip_str = std.mem.trim(u8, string.value, " ");
+        const num = std.fmt.parseFloat(f64, strip_str) catch {
             // vm.fiber.?.err = vm.newString("Number literal is too large.");
             args[0] = .NULL_VAL;
             return true;
@@ -3590,17 +3578,13 @@ pub const NumModule = struct {
 
     pub fn numDotDot(vm: *ZrenVM, args: []Value) bool {
         if (!vm.validateNum(args[1], "Right hand side of range")) return false;
-        const f = args[0].asNum();
-        const t = args[1].asNum();
-        args[0] = vm.newRange(f, t, true);
+        args[0] = vm.newRange(args[0].asNum(), args[1].asNum(), true);
         return true;
     }
 
     pub fn numDotDotDot(vm: *ZrenVM, args: []Value) bool {
         if (!vm.validateNum(args[1], "Right hand side of range")) return false;
-        const f = args[0].asNum();
-        const t = args[1].asNum();
-        args[0] = vm.newRange(f, t, false);
+        args[0] = vm.newRange(args[0].asNum(), args[1].asNum(), false);
         return true;
     }
 
@@ -3711,18 +3695,18 @@ pub const StringModule = struct {
 
     fn stringFromCodePoint(vm: *ZrenVM, args: []Value) bool {
         if (!vm.validateInt(args[1], "Code point")) return false;
-        const codePoint: i64 = @intFromFloat(args[1].asNum());
-        if (codePoint < 0) {
+        const code_point: i64 = @intFromFloat(args[1].asNum());
+        if (code_point < 0) {
             vm.fiber.?.err = vm.newString("Code point cannot be negative.");
             return false;
         }
 
-        if (codePoint > 0x0010ffff) {
+        if (code_point > 0x0010ffff) {
             vm.fiber.?.err = vm.newString("Code point cannot be greater than 0x10ffff.");
             return false;
         }
 
-        args[0] = vm.stringFromCodePoint(@intCast(codePoint));
+        args[0] = vm.stringFromCodePoint(@intCast(code_point));
         return true;
     }
 
@@ -4085,12 +4069,12 @@ pub const ListModule = struct {
 
     pub fn listSwap(vm: *ZrenVM, args: []Value) bool {
         const list = args[0].asList();
-        const indexA = vm.validateIndex(args[1], list.elements.count, "Index 0") orelse return false;
-        const indexB = vm.validateIndex(args[2], list.elements.count, "Index 1") orelse return false;
+        const index_a = vm.validateIndex(args[1], list.elements.count, "Index 0") orelse return false;
+        const index_b = vm.validateIndex(args[2], list.elements.count, "Index 1") orelse return false;
 
-        const a = list.elements.rat(indexA).*;
-        list.elements.rat(indexA).* = list.elements.at(indexB);
-        list.elements.rat(indexB).* = a;
+        const a = list.elements.rat(index_a).*;
+        list.elements.rat(index_a).* = list.elements.at(index_b);
+        list.elements.rat(index_b).* = a;
 
         args[0] = .NULL_VAL;
         return true;
@@ -4324,10 +4308,10 @@ pub const RangeModule = struct {
 
 pub const SystemModule = struct {
     pub fn _install(vm: *ZrenVM, module: *ObjModule) void {
-        const systemClass = vm.findVariable(module, "System").?.asClass();
-        vm.primitive(systemClass.asObj().class_obj, "clock", systemClock);
-        vm.primitive(systemClass.asObj().class_obj, "gc()", systemGc);
-        vm.primitive(systemClass.asObj().class_obj, "writeString_(_)", systemWriteString);
+        const system_class = vm.findVariable(module, "System").?.asClass();
+        vm.primitive(system_class.asObj().class_obj, "clock", systemClock);
+        vm.primitive(system_class.asObj().class_obj, "gc()", systemGc);
+        vm.primitive(system_class.asObj().class_obj, "writeString_(_)", systemWriteString);
     }
 
     pub fn systemClock(vm: *ZrenVM, args: []Value) bool {
