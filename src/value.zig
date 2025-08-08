@@ -26,43 +26,43 @@ pub const FuncDebug = struct {
 pub const CallFrame = struct {
     ip: []u8,
     closure: *ObjClosure,
-    stackRef: []Value,
-    stackOffset: usize = 0,
-    ipOffset: usize = 0,
+    stack_ref: []Value,
+    stack_offset: usize = 0,
+    ip_offset: usize = 0,
 
     pub inline fn ipPosOffset(self: *@This(), i: u16) void {
-        self.ipOffset += i;
+        self.ip_offset += i;
     }
 
     pub inline fn ipNegOffset(self: *@This(), i: u16) void {
-        self.ipOffset -= i;
+        self.ip_offset -= i;
     }
 
     pub inline fn rbyte(self: *@This()) u8 {
         self.ipPosOffset(1);
-        return self.ip[self.ipOffset - 1];
+        return self.ip[self.ip_offset - 1];
     }
 
     pub inline fn rshort(self: *@This()) u16 {
         self.ipPosOffset(2);
-        return Utils.b8tob16(self.ip[self.ipOffset - 2], self.ip[self.ipOffset - 1]);
+        return Utils.b8Tob16(self.ip[self.ip_offset - 2], self.ip[self.ip_offset - 1]);
     }
 
     pub inline fn setStackRef(self: *@This(), ref: []Value) void {
-        self.stackRef = ref;
+        self.stack_ref = ref;
     }
 
     pub inline fn setStack(self: *@This(), stack: []Value, offset: usize) void {
-        self.stackRef = stack;
-        self.stackOffset = offset;
+        self.stack_ref = stack;
+        self.stack_offset = offset;
     }
 
     pub inline fn stackAt(self: *@This(), i: usize) *Value {
-        return &self.stackRef[self.stackOffset + i];
+        return &self.stack_ref[self.stack_offset + i];
     }
 
     pub inline fn writeStack(self: *@This(), i: usize, v: *const Value) void {
-        self.stackRef[self.stackOffset + i] = v.*;
+        self.stack_ref[self.stack_offset + i] = v.*;
     }
 
     pub inline fn readConstant(self: *@This(), i: usize) *Value {
@@ -682,13 +682,13 @@ pub const ObjClass = struct {
                 .CODE_SUPER_16,
                 => {
                     // 向constant槽中填充对超类的引用.
-                    const constant = Utils.b8tob16(func.code.at(ip + 3), func.code.at(ip + 4));
+                    const constant = Utils.b8Tob16(func.code.at(ip + 3), func.code.at(ip + 4));
                     func.constants.rat(constant).* = self.super_class.?.asObj().toVal();
                 },
 
                 .CODE_CLOSURE => {
                     // 绑定嵌套的闭包.
-                    const constant = Utils.b8tob16(func.code.at(ip + 1), func.code.at(ip + 2));
+                    const constant = Utils.b8Tob16(func.code.at(ip + 1), func.code.at(ip + 2));
                     self.bindMethodCode(func.constants.at(constant).asFunc());
                     break;
                 },
@@ -717,9 +717,9 @@ pub const ObjFiber = struct {
     stack: GenericStack(Value) = undefined,
     frame: *CallFrame = undefined,
     frames: []CallFrame = undefined,
-    rawFrames: GenericBuffer(CallFrame) = undefined,
-    numFrames: usize = 0,
-    openUpvalues: ?*ObjUpvalue = null,
+    raw_frames: GenericBuffer(CallFrame) = undefined,
+    num_frames: usize = 0,
+    open_upvalues: ?*ObjUpvalue = null,
     caller: ?*ObjFiber = null,
     err: Value = .NULL_VAL,
     state: FiberState = .FIBER_OTHER,
@@ -738,16 +738,16 @@ pub const ObjFiber = struct {
     }
 
     pub fn fromFrames(self: *@This(), frames: GenericBuffer(CallFrame)) void {
-        self.rawFrames = frames;
-        self.frames = self.rawFrames.data.items;
-        self.numFrames = 0;
+        self.raw_frames = frames;
+        self.frames = self.raw_frames.data.items;
+        self.num_frames = 0;
     }
 
     pub fn initFrames(self: *@This(), capacity: usize) void {
-        self.rawFrames = GenericBuffer(CallFrame).init(self.allocator);
-        self.rawFrames.resize(capacity);
-        self.frames = self.rawFrames.data.items;
-        self.numFrames = 0;
+        self.raw_frames = GenericBuffer(CallFrame).init(self.allocator);
+        self.raw_frames.resize(capacity);
+        self.frames = self.raw_frames.data.items;
+        self.num_frames = 0;
     }
 
     pub inline fn asObj(self: *@This()) *Obj {
@@ -755,12 +755,12 @@ pub const ObjFiber = struct {
     }
 
     pub inline fn isDone(self: *@This()) bool {
-        return self.numFrames == 0 or self.hasErr();
+        return self.num_frames == 0 or self.hasErr();
     }
 
     pub inline fn deinit(self: *@This()) void {
         self.stack.deinit();
-        self.rawFrames.deinit();
+        self.raw_frames.deinit();
     }
 
     pub inline fn push(self: *@This(), value: Value) void {
@@ -792,23 +792,23 @@ pub const ObjFiber = struct {
     }
 
     pub inline fn ensureFrameCapacity(self: *@This(), capacity: usize) void {
-        if (capacity > self.rawFrames.len()) {
-            self.rawFrames.resize(self.rawFrames.len() * 2);
-            self.frames = self.rawFrames.data.items;
+        if (capacity > self.raw_frames.len()) {
+            self.raw_frames.resize(self.raw_frames.len() * 2);
+            self.frames = self.raw_frames.data.items;
         }
     }
 
     // 将闭包推入栈中，并创建一个帧. (但并未执行)
     pub fn pushFrame(self: *@This(), closure: *ObjClosure, offsetToStack: usize) void {
-        self.ensureFrameCapacity(self.numFrames + 1);
+        self.ensureFrameCapacity(self.num_frames + 1);
         // 调用帧+1, 起始栈设置为传入的栈, 闭包设置为传入的闭包, 指令指向闭包的fn指令.
-        var frame = &self.frames[self.numFrames];
-        self.numFrames += 1;
+        var frame = &self.frames[self.num_frames];
+        self.num_frames += 1;
 
         frame.setStack(self.stack.buffer, offsetToStack);
         frame.closure = closure;
         frame.ip = closure.func.code.data.items; // TODO 改进ip为对象?
-        frame.ipOffset = 0;
+        frame.ip_offset = 0;
     }
 
     pub inline fn saveFrame(self: *@This()) void {
@@ -816,11 +816,11 @@ pub const ObjFiber = struct {
     }
 
     pub inline fn loadFrame(self: *@This()) void {
-        self.frame = &self.frames[self.numFrames - 1];
+        self.frame = &self.frames[self.num_frames - 1];
     }
 
     pub inline fn dropFrame(self: *@This()) void {
-        self.numFrames -= 1;
+        self.num_frames -= 1;
     }
 
     pub inline fn hasErr(self: *@This()) bool {
@@ -828,25 +828,25 @@ pub const ObjFiber = struct {
     }
 
     pub fn remapFrames(self: *@This()) void {
-        for (0..self.numFrames) |i| {
+        for (0..self.num_frames) |i| {
             self.frames[i].setStackRef(self.stack.buffer);
         }
     }
 
     pub fn remapUpvalues(self: *@This()) void {
-        var upvalue: ?*ObjUpvalue = self.openUpvalues;
+        var upvalue: ?*ObjUpvalue = self.open_upvalues;
         while (upvalue) |up| : (upvalue = up.next) {
-            up.value = &self.stack.buffer[up.fromStackIndex];
+            up.value = &self.stack.buffer[up.from_stack_index];
         }
     }
 
     // 闭环任何[last]及以上为栈槽创建的upvalue.
     pub fn closeUpvalues(self: *@This(), last: *Value) void {
-        while (self.openUpvalues) |upvalue| {
+        while (self.open_upvalues) |upvalue| {
             // TODO 这里需要改进
             if (@intFromPtr(upvalue.*.value) < @intFromPtr(last)) break;
             upvalue.close();
-            self.openUpvalues = upvalue.next; // 从upvalue列表移除.
+            self.open_upvalues = upvalue.next; // 从upvalue列表移除.
         }
     }
 
@@ -865,8 +865,8 @@ pub const ObjFunc = struct {
     code: ByteBuffer,
     constants: ValueBuffer,
     module: ?*ObjModule,
-    maxSlots: usize,
-    numUpvalues: usize,
+    max_slots: usize,
+    num_upvalues: usize,
     arity: u64,
     debug: *FuncDebug,
     pub inline fn asObj(self: *@This()) *Obj {
@@ -970,9 +970,9 @@ pub const ObjFunc = struct {
             => return 4,
 
             .CODE_CLOSURE => {
-                const constant = Utils.b8tob16(self.code.at(ip + 1), self.code.at(ip + 2));
+                const constant = Utils.b8Tob16(self.code.at(ip + 1), self.code.at(ip + 2));
                 const loadedFn = self.constants.at(constant).asFunc();
-                return 2 + loadedFn.numUpvalues * 2; // 对于constant来说是两个字节, 每个upvalue是两个字节.
+                return 2 + loadedFn.num_upvalues * 2; // 对于constant来说是两个字节, 每个upvalue是两个字节.
             },
         }
         @panic("Unreachable!");
@@ -1091,7 +1091,7 @@ pub const ObjMap = struct {
 pub const ObjModule = struct {
     obj: Obj,
     variables: ValueBuffer,
-    variableNames: SymbolTable,
+    variable_names: SymbolTable,
     name: ?*ObjString = null,
     pub inline fn asObj(self: *@This()) *Obj {
         return @ptrCast(self);
@@ -1102,13 +1102,13 @@ pub const ObjRange = struct {
     obj: Obj,
     from: f64,
     to: f64,
-    isInclusive: bool, // 为true: 包含to, false: 开区间, 不包含to
+    is_inclusive: bool, // 为true: 包含to, false: 开区间, 不包含to
     pub inline fn asObj(self: *@This()) *Obj {
         return @ptrCast(self);
     }
 
     pub inline fn eql(self: *@This(), other: *ObjRange) bool {
-        return self.from == other.from and self.to == other.to and self.isInclusive == other.isInclusive;
+        return self.from == other.from and self.to == other.to and self.is_inclusive == other.is_inclusive;
     }
 
     pub inline fn hashCode(self: *@This()) u64 {
@@ -1155,7 +1155,7 @@ pub const ObjString = struct {
 
 pub const ObjUpvalue = struct {
     obj: Obj,
-    fromStackIndex: usize,
+    from_stack_index: usize,
     value: *Value,
     closed: Value,
     next: ?*ObjUpvalue = null,

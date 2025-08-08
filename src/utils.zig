@@ -5,7 +5,7 @@ pub fn strContains(str: []const u8, needle: []const u8) bool {
     return std.mem.indexOf(u8, str, needle) != null;
 }
 
-pub inline fn b8tob16(b1: u8, b2: u8) u16 {
+pub inline fn b8Tob16(b1: u8, b2: u8) u16 {
     return @as(u16, b1) << 8 | b2;
 }
 
@@ -104,28 +104,28 @@ pub fn utf8Decode(bytes: []const u8) ?u64 {
     var ptr = bytes.ptr;
     if (ptr[0] <= 0x7f) return ptr[0];
     var value: u64 = 0;
-    var remainingBytes: u32 = 0;
+    var remaining_bytes: u32 = 0;
     if ((ptr[0] & 0xe0) == 0xc0) {
         // 双字节序: 110xxxxx 10xxxxxx.
         value = @intCast(ptr[0] & 0x1f);
-        remainingBytes = 1;
+        remaining_bytes = 1;
     } else if ((ptr[0] & 0xf0) == 0xe0) {
         // 三字节序: 1110xxxx 10xxxxxx 10xxxxxx.
         value = @intCast(ptr[0] & 0x0f);
-        remainingBytes = 2;
+        remaining_bytes = 2;
     } else if ((ptr[0] & 0xf8) == 0xf0) {
         // 四字节序: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx.
         value = @intCast(ptr[0] & 0x07);
-        remainingBytes = 3;
+        remaining_bytes = 3;
     } else {
         return null;
     }
 
     // 不读取超过缓冲区末尾的截断UTF-8.
-    if (remainingBytes > bytes.len - 1) return null;
-    while (remainingBytes > 0) {
+    if (remaining_bytes > bytes.len - 1) return null;
+    while (remaining_bytes > 0) {
         ptr += 1;
-        remainingBytes -= 1;
+        remaining_bytes -= 1;
         // 剩余字节必须是10xxxxxx的形式
         if ((ptr[0] & 0xc0) != 0x80) return null;
         value = (value << 6) | (ptr[0] & 0x3f);

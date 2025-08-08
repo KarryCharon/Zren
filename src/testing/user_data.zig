@@ -14,11 +14,11 @@ var data = [_]u8{ 'm', 'y', ' ', 'u', 's', 'e', 'r', ' ', 'd', 'a', 't', 'a' };
 var otherData = [_]u8{ 'o', 't', 'h', 'e', 'r', ' ', 'u', 's', 'e', 'r', ' ', 'd', 'a', 't', 'a' };
 
 fn testResizeFn(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ra: usize) bool {
-    const gc = VM.ZrenVM.GcAllocator.cast(context);
-    if (gc.vm.config.userData) |ud| if (@as([*]u8, @ptrCast(ud)) != data[0..].ptr) return false;
+    const gc = VM.ZrenVM.GCAllocator.cast(context);
+    if (gc.vm.config.user_data) |ud| if (@as([*]u8, @ptrCast(ud)) != data[0..].ptr) return false;
 
     if (new_len == 0) {
-        gc.vm.rawAllocator.free(memory);
+        gc.vm.raw_allocator.free(memory);
         return false;
     }
 
@@ -26,12 +26,12 @@ fn testResizeFn(context: *anyopaque, memory: []u8, alignment: Alignment, new_len
 }
 
 fn testRemapFn(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ra: usize) ?[*]u8 {
-    const gc = VM.ZrenVM.GcAllocator.cast(context);
+    const gc = VM.ZrenVM.GCAllocator.cast(context);
 
-    if (gc.vm.config.userData) |ud| if (@as([*]u8, @ptrCast(ud)) != data[0..].ptr) return null;
+    if (gc.vm.config.user_data) |ud| if (@as([*]u8, @ptrCast(ud)) != data[0..].ptr) return null;
 
     if (new_len == 0) {
-        gc.vm.rawAllocator.free(memory);
+        gc.vm.raw_allocator.free(memory);
         return null;
     }
 
@@ -42,7 +42,7 @@ fn testFn(vm: *VM.ZrenVM) void {
     var configuration = VM.ZrenConfiguration.init(vm.allocator);
 
     // 默认情况下应当是null.
-    if (configuration.userData != null) {
+    if (configuration.user_data != null) {
         vm.setSlotBool(0, false);
         return;
     }
@@ -61,9 +61,9 @@ fn testFn(vm: *VM.ZrenVM) void {
 
     // 这里需要定义一个allocator, 将其realloc传入
     configuration.allocator = custom_allocator;
-    configuration.userData = @ptrCast(@alignCast(data[0..].ptr));
+    configuration.user_data = @ptrCast(@alignCast(data[0..].ptr));
 
-    var otherVM = VM.ZrenVM.newVm(configuration);
+    var otherVM = VM.ZrenVM.newVM(configuration);
     defer otherVM.deinit();
     // 应当能获取到.
     if (otherVM.getUserData()) |ud| if (@intFromPtr(ud) != @intFromPtr(data[0..].ptr)) {

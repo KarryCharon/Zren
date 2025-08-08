@@ -24,36 +24,36 @@ const SymbolTable = V.SymbolTable;
 
 pub const Parser = struct {
     const KEYWORDS: []const Keyword = &.{
-        .{ .identifier = "break", .tokenType = .TOKEN_BREAK },
-        .{ .identifier = "continue", .tokenType = .TOKEN_CONTINUE },
-        .{ .identifier = "class", .tokenType = .TOKEN_CLASS },
-        .{ .identifier = "construct", .tokenType = .TOKEN_CONSTRUCT },
-        .{ .identifier = "else", .tokenType = .TOKEN_ELSE },
-        .{ .identifier = "false", .tokenType = .TOKEN_FALSE },
-        .{ .identifier = "for", .tokenType = .TOKEN_FOR },
-        .{ .identifier = "foreign", .tokenType = .TOKEN_FOREIGN },
-        .{ .identifier = "if", .tokenType = .TOKEN_IF },
-        .{ .identifier = "import", .tokenType = .TOKEN_IMPORT },
-        .{ .identifier = "as", .tokenType = .TOKEN_AS },
-        .{ .identifier = "in", .tokenType = .TOKEN_IN },
-        .{ .identifier = "is", .tokenType = .TOKEN_IS },
-        .{ .identifier = "null", .tokenType = .TOKEN_NULL },
-        .{ .identifier = "return", .tokenType = .TOKEN_RETURN },
-        .{ .identifier = "static", .tokenType = .TOKEN_STATIC },
-        .{ .identifier = "super", .tokenType = .TOKEN_SUPER },
-        .{ .identifier = "this", .tokenType = .TOKEN_THIS },
-        .{ .identifier = "true", .tokenType = .TOKEN_TRUE },
-        .{ .identifier = "var", .tokenType = .TOKEN_VAR },
-        .{ .identifier = "while", .tokenType = .TOKEN_WHILE },
-        .{ .identifier = "", .tokenType = .TOKEN_EOF },
+        .{ .identifier = "break", .token_type = .TOKEN_BREAK },
+        .{ .identifier = "continue", .token_type = .TOKEN_CONTINUE },
+        .{ .identifier = "class", .token_type = .TOKEN_CLASS },
+        .{ .identifier = "construct", .token_type = .TOKEN_CONSTRUCT },
+        .{ .identifier = "else", .token_type = .TOKEN_ELSE },
+        .{ .identifier = "false", .token_type = .TOKEN_FALSE },
+        .{ .identifier = "for", .token_type = .TOKEN_FOR },
+        .{ .identifier = "foreign", .token_type = .TOKEN_FOREIGN },
+        .{ .identifier = "if", .token_type = .TOKEN_IF },
+        .{ .identifier = "import", .token_type = .TOKEN_IMPORT },
+        .{ .identifier = "as", .token_type = .TOKEN_AS },
+        .{ .identifier = "in", .token_type = .TOKEN_IN },
+        .{ .identifier = "is", .token_type = .TOKEN_IS },
+        .{ .identifier = "null", .token_type = .TOKEN_NULL },
+        .{ .identifier = "return", .token_type = .TOKEN_RETURN },
+        .{ .identifier = "static", .token_type = .TOKEN_STATIC },
+        .{ .identifier = "super", .token_type = .TOKEN_SUPER },
+        .{ .identifier = "this", .token_type = .TOKEN_THIS },
+        .{ .identifier = "true", .token_type = .TOKEN_TRUE },
+        .{ .identifier = "var", .token_type = .TOKEN_VAR },
+        .{ .identifier = "while", .token_type = .TOKEN_WHILE },
+        .{ .identifier = "", .token_type = .TOKEN_EOF },
     };
     vm: *ZrenVM = undefined,
     module: *ObjModule = undefined, // 当前正在解析的模块
     source: []const u8 = &.{}, // 被解析的源码
 
-    tokenPos: usize = 0, // 当前被解析的token的起始位置(source中)
-    charPos: usize = 0, // 当前字符位置(source中)
-    currLine: usize = 1, // 当前字符对应的行数(source中, 起始为1)
+    token_pos: usize = 0, // 当前被解析的token的起始位置(source中)
+    char_pos: usize = 0, // 当前字符位置(source中)
+    curr_line: usize = 1, // 当前字符对应的行数(source中, 起始为1)
     next: Token = .{}, // 下一个(即将被处理)
     curr: Token = .{}, // 当前(正在被处理)
     prev: Token = .{}, // 最近一个(消费/前移)
@@ -68,13 +68,13 @@ pub const Parser = struct {
     // 这里使用这个栈来追踪状态. 解析器维护一个整数栈, 每个整数对应插值字符串的一个层级.
     // 每个整数值代表等待被关闭的未匹配的`(`的数量.
     parens: [C.MAX_INTERPOLATION_NESTING]i32 = .{0} ** C.MAX_INTERPOLATION_NESTING,
-    numParens: usize = 0, //
-    printErrors: bool = true, // 打印编译错误或丢弃
-    hasError: bool = false, // 是否有语法错误或编译错误
+    num_parens: usize = 0, //
+    print_errors: bool = true, // 打印编译错误或丢弃
+    has_error: bool = false, // 是否有语法错误或编译错误
 
     fn printError(self: *@This(), line: usize, label: []const u8, comptime fmt: []const u8, args: anytype) void {
-        self.hasError = true;
-        if (!self.printErrors) return;
+        self.has_error = true;
+        if (!self.print_errors) return;
 
         const errorFn = self.vm.config.errorFn orelse return;
 
@@ -88,7 +88,7 @@ pub const Parser = struct {
     }
 
     fn lexError(self: *@This(), comptime fmt: []const u8, args: anytype) void {
-        self.printError(self.currLine, "Error", fmt, args);
+        self.printError(self.curr_line, "Error", fmt, args);
     }
 
     pub fn nextToken(self: *@This()) void {
@@ -97,24 +97,24 @@ pub const Parser = struct {
 
         // 如果已经读取到文件末尾，则返回
         // 仍然复制 TOKEN_EOF 到 prev 以便期望它被消费的代码仍然可以工作
-        if (self.next.tokenType == .TOKEN_EOF) return;
-        if (self.curr.tokenType == .TOKEN_EOF) return;
+        if (self.next.token_type == .TOKEN_EOF) return;
+        if (self.curr.token_type == .TOKEN_EOF) return;
 
-        while (self.charPos < self.source.len) {
-            self.tokenPos = self.charPos;
+        while (self.char_pos < self.source.len) {
+            self.token_pos = self.char_pos;
 
             const c = self.nextChar();
             switch (c) {
                 '(' => {
-                    if (self.numParens > 0) self.parens[self.numParens - 1] += 1;
+                    if (self.num_parens > 0) self.parens[self.num_parens - 1] += 1;
                     self.makeToken(.TOKEN_LEFT_PAREN);
                     return;
                 },
                 ')' => {
-                    if (self.numParens > 0) {
-                        self.parens[self.numParens - 1] -= 1;
-                        if (self.parens[self.numParens - 1] == 0) {
-                            self.numParens -= 1;
+                    if (self.num_parens > 0) {
+                        self.parens[self.num_parens - 1] -= 1;
+                        if (self.parens[self.num_parens - 1] == 0) {
+                            self.num_parens -= 1;
                             self.readString();
                             return;
                         }
@@ -156,7 +156,7 @@ pub const Parser = struct {
                 },
                 '#' => {
                     // 忽略第一行中的shebang
-                    if (self.currLine == 1 and self.peekChar() == '!' and self.peekNextChar() == '/') {
+                    if (self.curr_line == 1 and self.peekChar() == '!' and self.peekNextChar() == '/') {
                         self.skipLineComment();
                     } else {
                         self.makeToken(.TOKEN_HASH); // 否则当作token处理
@@ -280,15 +280,15 @@ pub const Parser = struct {
                             // 即使源代码和终端输出是UTF-8编码的.
                             self.lexError("Invalid byte 0x{x}.", .{c});
                         }
-                        self.next.tokenType = .TOKEN_ERROR;
-                        self.next.charNum = 0;
+                        self.next.token_type = .TOKEN_ERROR;
+                        self.next.char_num = 0;
                     }
                     return;
                 },
             }
         }
         // 如果到达源码末尾, 则生成一个EOF token.
-        self.tokenPos = self.charPos;
+        self.token_pos = self.char_pos;
         self.makeToken(.TOKEN_EOF);
     }
 
@@ -297,19 +297,19 @@ pub const Parser = struct {
     }
 
     inline fn peekChar(self: *@This()) u8 {
-        return if (self.charPos < self.source.len) self.source[self.charPos] else '\x00';
+        return if (self.char_pos < self.source.len) self.source[self.char_pos] else '\x00';
     }
 
     inline fn peekNextChar(self: *@This()) u8 {
         // 如果位于源码末尾, 不则读取下一个字符, 否则读取下一个字符
-        return if (self.peekChar() == '\x00') '\x00' else self.safePeekChar(self.charPos + 1);
+        return if (self.peekChar() == '\x00') '\x00' else self.safePeekChar(self.char_pos + 1);
     }
 
     // 向前移动一个字符
     fn nextChar(self: *@This()) u8 {
         const c = self.peekChar();
-        self.charPos += 1;
-        if (c == '\n') self.currLine += 1;
+        self.char_pos += 1;
+        if (c == '\n') self.curr_line += 1;
         return c;
     }
 
@@ -321,15 +321,15 @@ pub const Parser = struct {
     }
 
     // 设置解析器的当前token为给定的 [type] 及字符范围.
-    fn makeToken(self: *@This(), tokenType: TokenType) void {
-        self.next.tokenType = tokenType;
-        self.next.sourceRef = self.source;
-        self.next.charStart = self.tokenPos;
-        self.next.charNum = self.charPos - self.tokenPos;
-        self.next.line = self.currLine;
+    fn makeToken(self: *@This(), token_type: TokenType) void {
+        self.next.token_type = token_type;
+        self.next.source_ref = self.source;
+        self.next.char_start = self.token_pos;
+        self.next.char_num = self.char_pos - self.token_pos;
+        self.next.line = self.curr_line;
 
         // 在包含"\n"的行上生成LINE token.
-        if (tokenType == .TOKEN_LINE) self.next.line -= 1;
+        if (token_type == .TOKEN_LINE) self.next.line -= 1;
     }
 
     // 如果当前字符是 [c], 则消费它并生成一个类型为 [two] 的token. 否则生成一个类型为 [one] 的token.
@@ -377,18 +377,18 @@ pub const Parser = struct {
         if (c >= 'a' and c <= 'f') return c - 'a' + 10;
         if (c >= 'A' and c <= 'F') return c - 'A' + 10;
         // 如果不是十六进制数字, 则回退一个字符. (不消费)
-        self.charPos -= 1;
+        self.char_pos -= 1;
         return null;
     }
 
-    fn makeNumber(self: *@This(), isHex: bool) void {
+    fn makeNumber(self: *@This(), is_hex: bool) void {
         // TODO 改进算法??
         var err: anyerror = undefined;
 
-        const str = self.source[self.tokenPos..self.charPos];
+        const str = self.source[self.token_pos..self.char_pos];
         var num: f64 = 0;
 
-        if (isHex) {
+        if (is_hex) {
             const inum = std.fmt.parseInt(i64, str, 0) catch |e| blk: {
                 err = e;
                 break :blk 0;
@@ -447,27 +447,27 @@ pub const Parser = struct {
         self.makeNumber(false);
     }
 
-    fn readName(self: *@This(), t: TokenType, firstChar: u8) void {
-        var tokenType = t;
-        var string = ByteBuffer.init(self.vm.rawAllocator);
+    fn readName(self: *@This(), t: TokenType, first_char: u8) void {
+        var token_type = t;
+        var string = ByteBuffer.init(self.vm.raw_allocator);
         defer string.deinit();
-        _ = string.write(firstChar);
+        _ = string.write(first_char);
         while (Utils.isName(self.peekChar()) or Utils.isDigit(self.peekChar())) {
             _ = string.write(self.nextChar());
         }
 
-        const length = self.charPos - self.tokenPos;
-        const currIdentifier = self.source[self.tokenPos .. self.tokenPos + length];
+        const length = self.char_pos - self.token_pos;
+        const curr_identifier = self.source[self.token_pos .. self.token_pos + length];
         for (KEYWORDS) |keyword| {
             if (length != keyword.identifier.len) continue;
-            if (std.mem.eql(u8, keyword.identifier, currIdentifier)) {
-                tokenType = keyword.tokenType;
+            if (std.mem.eql(u8, keyword.identifier, curr_identifier)) {
+                token_type = keyword.token_type;
                 break;
             }
         }
 
         self.next.value = self.vm.newString(string.data.items[0..string.count]);
-        self.makeToken(tokenType);
+        self.makeToken(token_type);
     }
 
     fn readHexEscape(self: *@This(), digits: usize, description: []const u8) u64 {
@@ -475,7 +475,7 @@ pub const Parser = struct {
         for (0..digits) |_| {
             if (self.peekChar() == '"' or self.peekChar() == '\x00') {
                 self.lexError("Incomplete {s} escape sequence.", .{description});
-                self.charPos -= 1; // 不匹配"或\0时, 不消费该字符. 防止读取未终止字符串的末尾部分.
+                self.char_pos -= 1; // 不匹配"或\0时, 不消费该字符. 防止读取未终止字符串的末尾部分.
                 break;
             }
 
@@ -499,18 +499,18 @@ pub const Parser = struct {
     }
 
     fn readRawString(self: *@This()) void {
-        var string = ByteBuffer.init(self.vm.rawAllocator);
+        var string = ByteBuffer.init(self.vm.raw_allocator);
         defer string.deinit();
 
         // 消费第二个和第三个双引号 "
         _ = self.nextChar();
         _ = self.nextChar();
 
-        var skipStart: ?usize = 0;
-        var firstNewLine: ?usize = null;
+        var skip_start: ?usize = 0;
+        var first_new_line: ?usize = null;
 
-        var skipEnd: ?usize = null;
-        var lastNewLine: ?usize = null;
+        var skip_end: ?usize = null;
+        var last_new_line: ?usize = null;
 
         while (true) {
             const c0 = self.nextChar();
@@ -520,27 +520,27 @@ pub const Parser = struct {
             if (c0 == '\r') continue;
 
             if (c0 == '\n') {
-                lastNewLine = string.count;
-                skipEnd = string.count;
-                if (firstNewLine == null) firstNewLine = lastNewLine; // 设置第一个换行符的位置
+                last_new_line = string.count;
+                skip_end = string.count;
+                if (first_new_line == null) first_new_line = last_new_line; // 设置第一个换行符的位置
             }
 
             if (c0 == '"' and c1 == '"' and c2 == '"') break;
 
-            const isWhitespace = c0 == ' ' or c0 == '\t';
-            skipEnd = if (c0 == '\n' or isWhitespace) skipEnd else null;
+            const is_white_space = c0 == ' ' or c0 == '\t';
+            skip_end = if (c0 == '\n' or is_white_space) skip_end else null;
 
             // 如果没有遇到换行符或者其它字符, 但遇到空白符, 则认为这些字符可跳过, 直到遇到其它字符为止.
-            const skippable = skipStart != null and isWhitespace and firstNewLine == null;
-            skipStart = if (skippable) string.count + 1 else skipStart;
+            const skippable = skip_start != null and is_white_space and first_new_line == null;
+            skip_start = if (skippable) string.count + 1 else skip_start;
 
             // 这里已经统计了前导空白字符, 但不是换行符, 所以需要重置skipStart, 因为这些是需要的字符.
-            if (firstNewLine == null and !isWhitespace and c0 != '\n') skipStart = null;
+            if (first_new_line == null and !is_white_space and c0 != '\n') skip_start = null;
 
             if (c0 == '\x00' or c1 == '\x00' or c2 == '\x00') {
                 self.lexError("Unterminated raw string.", .{});
                 // 如果不是预期的字符, 则不消费它. 防止读取未终止字符串的末尾部分.
-                self.charPos -= 1;
+                self.char_pos -= 1;
                 break;
             }
             _ = string.write(c0);
@@ -553,8 +553,8 @@ pub const Parser = struct {
         var offset: usize = 0;
         var count: usize = string.count;
 
-        if (firstNewLine != null and skipStart == firstNewLine) offset = firstNewLine.? + 1;
-        if (lastNewLine != null and skipEnd == lastNewLine) count = lastNewLine.?;
+        if (first_new_line != null and skip_start == first_new_line) offset = first_new_line.? + 1;
+        if (last_new_line != null and skip_end == last_new_line) count = last_new_line.?;
 
         count -= if (offset > count) count else offset;
         self.next.value = self.vm.newString(string.data.items[offset .. offset + count]);
@@ -562,25 +562,25 @@ pub const Parser = struct {
     }
 
     fn readString(self: *@This()) void {
-        var string = ByteBuffer.init(self.vm.rawAllocator);
+        var string = ByteBuffer.init(self.vm.raw_allocator);
         defer string.deinit();
-        var tokenType: TokenType = .TOKEN_STRING;
+        var token_type: TokenType = .TOKEN_STRING;
         while (true) {
             const c = self.nextChar();
             if (c == '"') break;
             if (c == '\r') continue;
             if (c == '\x00') {
                 self.lexError("Unterminated string.", .{});
-                self.charPos -= 1;
+                self.char_pos -= 1;
                 break;
             }
 
             if (c == '%') {
-                if (self.numParens < C.MAX_INTERPOLATION_NESTING) {
+                if (self.num_parens < C.MAX_INTERPOLATION_NESTING) {
                     if (self.nextChar() != '(') self.lexError("Expect '(' after '%'.", .{});
-                    self.parens[self.numParens] = 1;
-                    self.numParens += 1;
-                    tokenType = .TOKEN_INTERPOLATION;
+                    self.parens[self.num_parens] = 1;
+                    self.num_parens += 1;
+                    token_type = .TOKEN_INTERPOLATION;
                     break;
                 }
                 self.lexError("Interpolation may only nest {d} levels deep.", .{C.MAX_INTERPOLATION_NESTING});
@@ -605,13 +605,13 @@ pub const Parser = struct {
                     'u' => self.readUnicodeEscape(&string, 4),
                     'U' => self.readUnicodeEscape(&string, 8),
                     'x' => string.write(@intCast(self.readHexEscape(2, "byte"))),
-                    else => self.lexError("Invalid escape character '{c}'.", .{self.source[self.charPos - 1]}),
+                    else => self.lexError("Invalid escape character '{c}'.", .{self.source[self.char_pos - 1]}),
                 };
             }
         }
 
         self.next.value = self.vm.newString(string.data.items[0..string.count]);
-        self.makeToken(tokenType);
+        self.makeToken(token_type);
     }
 };
 
@@ -620,24 +620,24 @@ pub const Compiler = struct {
     parser: *Parser = undefined,
     parent: ?*@This() = null,
     locals: [C.MAX_LOCALS]Local = [_]Local{.{}} ** C.MAX_LOCALS,
-    numLocals: usize = 0,
+    num_locals: usize = 0,
     upvalues: [C.MAX_UPVALUES]CompilerUpvalue = [_]CompilerUpvalue{.{}} ** C.MAX_UPVALUES,
-    scopeDepth: i32 = 0,
-    numSlots: usize = 0,
+    scope_depth: i32 = 0,
+    num_slots: usize = 0,
     loop: ?*Loop = null,
-    enclosingClass: ?*ClassInfo = null,
+    enclosing_class: ?*ClassInfo = null,
     func: ?*ObjFunc = null,
     constants: ?*ObjMap = null,
-    isInitializer: bool = false,
-    numAttributes: usize = 0,
+    is_initializer: bool = false,
+    num_attrs: usize = 0,
     attributes: ?*ObjMap = null,
 
     pub fn init(self: *@This(), parser: *Parser, parent: ?*@This(), isMethod: bool) void {
         self.parser = parser;
         self.parent = parent;
         self.loop = null;
-        self.enclosingClass = null;
-        self.isInitializer = false;
+        self.enclosing_class = null;
+        self.is_initializer = false;
 
         // 在allocate之前初始化这些为NULL, 以防止GC在初始化编译器过程中被触发.
         self.func = null;
@@ -650,24 +650,24 @@ pub const Compiler = struct {
         // 对于方法, 我们将其命名为 "this", 这样就可以像普通变量一样对其解引用.
         // 对于函数, 它们没有显式的 "this", 因此使用一个空名称.
         // 这样对 "this" 的引用就可以沿着父链向上查找, 找到包含该函数的方法, 该方法可以关闭 "this".
-        self.numLocals = 1;
-        self.numSlots = self.numLocals;
+        self.num_locals = 1;
+        self.num_slots = self.num_locals;
 
         self.locals[0].name = if (isMethod) "this" else &.{};
 
         self.locals[0].depth = -1;
-        self.locals[0].isUpvalue = false;
+        self.locals[0].is_upvalue = false;
 
-        self.scopeDepth = if (parent != null) 0 else -1;
+        self.scope_depth = if (parent != null) 0 else -1;
 
-        self.numAttributes = 0;
+        self.num_attrs = 0;
         self.attributes = parser.vm.newMap();
-        self.func = parser.vm.newFunction(parser.module, self.numLocals);
+        self.func = parser.vm.newFunction(parser.module, self.num_locals);
     }
 
     pub fn parsePrecedence(self: *@This(), precedence: Precedence) void {
         self.parser.nextToken();
-        const prefix = RULES[self.parser.prev.tokenType.num()].prefix orelse {
+        const prefix = RULES[self.parser.prev.token_type.num()].prefix orelse {
             self.doError("Expected expression.", .{});
             return;
         };
@@ -676,13 +676,13 @@ pub const Compiler = struct {
         // 我们不能像普通表达式那样编译赋值, 因为它需要我们特别处理左侧, 它需要是一个lvalue, 而不是一个rvalue.
         // 因此, 对于每一个是合法lvalue名, 下标, 字段等类型的表达式, 我们都会传入是否允许"="的上下文松散程度.
         // 如果是, 它将解析 "=" 本身并适当地处理它.
-        const canAssign = precedence.num() <= Precedence.PREC_CONDITIONAL.num();
-        prefix(self, canAssign);
+        const can_assign = precedence.num() <= Precedence.PREC_CONDITIONAL.num();
+        prefix(self, can_assign);
 
-        while (precedence.num() <= RULES[self.parser.curr.tokenType.num()].precedence.num()) {
+        while (precedence.num() <= RULES[self.parser.curr.token_type.num()].precedence.num()) {
             self.parser.nextToken();
-            const infix = RULES[self.parser.prev.tokenType.num()].infix orelse continue;
-            infix(self, canAssign);
+            const infix = RULES[self.parser.prev.token_type.num()].infix orelse continue;
+            infix(self, can_assign);
         }
     }
 
@@ -694,14 +694,14 @@ pub const Compiler = struct {
     fn startLoop(self: *@This(), loop: *Loop) void {
         loop.enclosing = self.loop;
         loop.start = self.func.?.code.count;
-        loop.scopeDepth = self.scopeDepth;
+        loop.scope_depth = self.scope_depth;
         self.loop = loop;
     }
 
     // 生成用于测试循环条件的[CODE_JUMP_IF]指令, 并可能退出循环.
     // 保持追踪该指令, 已便后续知道body的结束位置时, 可以进行jumpPatch填充.
     fn testExitLoop(self: *@This()) void {
-        self.loop.?.exitJump = self.emitJump(.CODE_JUMP_IF);
+        self.loop.?.exit_jump = self.emitJump(.CODE_JUMP_IF);
     }
 
     // 编译循环体并跟踪其范围, 以便可以正确处理包含的 "break" 语句.
@@ -720,7 +720,7 @@ pub const Compiler = struct {
         const loopOffset: u16 = @truncate(func.code.count - loop.start + 3);
         self.emitShortArg(.CODE_LOOP, loopOffset);
 
-        self.patchJump(loop.exitJump);
+        self.patchJump(loop.exit_jump);
 
         // 查找任何break占位符指令(在字节码中将是CODE_END), 并用真正的jump替换.
         var i = loop.body;
@@ -751,7 +751,7 @@ pub const Compiler = struct {
         var c: Compiler = .{};
         c.init(self.parser, self, true);
 
-        const op: OpCode = if (self.enclosingClass.?.isForeign) .CODE_FOREIGN_CONSTRUCT else .CODE_CONSTRUCT;
+        const op: OpCode = if (self.enclosing_class.?.is_foreign) .CODE_FOREIGN_CONSTRUCT else .CODE_CONSTRUCT;
         c.emitOp(op); // 分配新的实例
         c.emitShortArg(OpCode.CODE_CALL_0.poffset(signature.arity), initializerSymbol); // 运行初始化方法
         c.emitOp(.CODE_RETURN); // 返回实例
@@ -775,11 +775,11 @@ pub const Compiler = struct {
         const symbol = self.signatureSymbol(signature);
 
         // 检查类是否已经声明了具有此签名的函数.
-        const classInfo = self.enclosingClass orelse unreachable;
-        const methods = if (classInfo.inStatic) &classInfo.staticMethods else &classInfo.methods;
+        const classInfo = self.enclosing_class orelse unreachable;
+        const methods = if (classInfo.in_static) &classInfo.static_methods else &classInfo.methods;
         for (0..methods.count) |i| {
             if (methods.at(i) != symbol) continue;
-            const staticPrefix = if (classInfo.inStatic) "static " else "";
+            const staticPrefix = if (classInfo.in_static) "static " else "";
             self.doError("Class {s} already defines a {s}method '{s}'.", .{ classInfo.name.value, staticPrefix, name });
             break;
         }
@@ -803,7 +803,7 @@ pub const Compiler = struct {
     fn matchAttribute(self: *@This()) bool {
         if (!self.match(.TOKEN_HASH)) return false;
 
-        self.numAttributes += 1;
+        self.num_attrs += 1;
         const runtimeAccess = self.match(.TOKEN_BANG);
         if (!self.match(.TOKEN_NAME)) self.doError("Expect an attribute definition after #.", .{});
 
@@ -846,15 +846,15 @@ pub const Compiler = struct {
     }
 
     // 编译class 代码块中的成员函数. 如果编译成功，返回true，否则返回false.
-    fn method(self: *@This(), classVariable: Variable) bool {
+    fn method(self: *@This(), class_var: Variable) bool {
         // 在解析方法之前解, 先析属性并将其存储
-        if (self.matchAttribute()) return self.method(classVariable);
+        if (self.matchAttribute()) return self.method(class_var);
 
-        const isForeign = self.match(.TOKEN_FOREIGN);
-        const isStatic = self.match(.TOKEN_STATIC);
-        self.enclosingClass.?.inStatic = isStatic;
+        const is_foreign = self.match(.TOKEN_FOREIGN);
+        const is_static = self.match(.TOKEN_STATIC);
+        self.enclosing_class.?.in_static = is_static;
 
-        const _signatureFn = RULES[self.parser.curr.tokenType.num()].method;
+        const _signatureFn = RULES[self.parser.curr.token_type.num()].method;
         self.parser.nextToken();
         const signatureFn = _signatureFn orelse {
             self.doError("Expect method definition.", .{});
@@ -863,66 +863,66 @@ pub const Compiler = struct {
 
         // 构建方法签名.
         var signature = self.signatureFromToken(.SIG_GETTER);
-        self.enclosingClass.?.signature = &signature;
+        self.enclosing_class.?.signature = &signature;
 
-        var methodCompiler: Compiler = .{};
-        methodCompiler.init(self.parser, self, true);
+        var method_compiler: Compiler = .{};
+        method_compiler.init(self.parser, self, true);
 
         // 编译方法签名.
-        signatureFn(&methodCompiler, &signature);
+        signatureFn(&method_compiler, &signature);
 
-        methodCompiler.isInitializer = signature.stype == .SIG_INITIALIZER;
+        method_compiler.is_initializer = signature.stype == .SIG_INITIALIZER;
 
-        if (isStatic and signature.stype == .SIG_INITIALIZER) {
+        if (is_static and signature.stype == .SIG_INITIALIZER) {
             self.doError("A constructor cannot be static.", .{});
         }
         // 在debug消息中包含完整的签名，以便在堆栈跟踪中显示.
-        var fullSignature = [_]u8{0} ** C.MAX_METHOD_SIGNATURE;
-        const fs = signature.toString(fullSignature[0..]);
+        var full_sign = [_]u8{0} ** C.MAX_METHOD_SIGNATURE;
+        const fs = signature.toString(full_sign[0..]);
         // 拷贝编译器收集的任何属性到封闭类中.
-        self.copyMethodAttributes(isForeign, isStatic, fs);
+        self.copyMethodAttributes(is_foreign, is_static, fs);
 
         // 检查方法是否已经定义.
-        const methodsymbol = self.declareMethod(&signature, fs); // 这里只是为 method 分配一个符号，并没有真正定义
+        const method_symbol = self.declareMethod(&signature, fs); // 这里只是为 method 分配一个符号，并没有真正定义
 
-        if (isForeign) {
+        if (is_foreign) {
             // 对该签名进行常量定义
             self.emitConstant(self.parser.vm.newString(fs));
-            methodCompiler.parser.vm.compiler = methodCompiler.parent.?;
+            method_compiler.parser.vm.compiler = method_compiler.parent.?;
         } else {
             self.consume(.TOKEN_LEFT_BRACE, "Expect '{{' to begin method body.");
-            methodCompiler.finishBody();
-            _ = methodCompiler.endCompiler(fs);
+            method_compiler.finishBody();
+            _ = method_compiler.endCompiler(fs);
         }
 
         // 定义方法. 对于构造函数，这里是定义实例初始化方法.
-        self.defineMethod(classVariable, isStatic, methodsymbol);
+        self.defineMethod(class_var, is_static, method_symbol);
 
         if (signature.stype == .SIG_INITIALIZER) {
             // 同时在元类上定义一个匹配的构造函数方法.
             signature.stype = .SIG_METHOD;
             const constructorSymbol = self.signatureSymbol(&signature);
 
-            self.createConstructor(&signature, methodsymbol);
-            self.defineMethod(classVariable, true, constructorSymbol);
+            self.createConstructor(&signature, method_symbol);
+            self.defineMethod(class_var, true, constructorSymbol);
         }
 
         return true;
     }
 
     // 编译类定义. 假定该"class"的token已经被消费了（以及可能的前置"foreign" token）.
-    fn classDefinition(self: *@This(), isForeign: bool) void {
+    fn classDefinition(self: *@This(), is_foreign: bool) void {
         // 创建一个变量已存储类.
-        const classVariable: Variable = .{ .scope = if (self.scopeDepth == -1) .SCOPE_MODULE else .SCOPE_LOCAL, .index = self.declareNamedVariable() };
+        const class_var: Variable = .{ .scope = if (self.scope_depth == -1) .SCOPE_MODULE else .SCOPE_LOCAL, .index = self.declareNamedVariable() };
 
         // 创建共享的类名值.
-        const classNameString: Value = self.parser.vm.newString(self.parser.prev.name());
+        const class_name_str: Value = self.parser.vm.newString(self.parser.prev.name());
 
         // 创建类名字符串以跟踪方法重复项
-        const className = classNameString.asString();
+        const class_name = class_name_str.asString();
 
         // 为类名创建一个字符串常量.
-        self.emitConstant(classNameString);
+        self.emitConstant(class_name_str);
 
         if (self.match(.TOKEN_IS)) {
             self.parsePrecedence(.PREC_CALL); // 如果存在，加载超类
@@ -931,44 +931,44 @@ pub const Compiler = struct {
         }
 
         // 为类字段数量预留一个占位符. 在编译所有方法以查看哪些字段被使用前，并不知道具体数量.
-        var numFieldsInstruction: usize = 0;
-        if (isForeign) {
+        var num_fields_instruction: usize = 0;
+        if (is_foreign) {
             self.emitOp(.CODE_FOREIGN_CLASS);
         } else {
-            numFieldsInstruction = self.emitByteArg(.CODE_CLASS, 255);
+            num_fields_instruction = self.emitByteArg(.CODE_CLASS, 255);
         }
 
         // 将类存储在其名称中.
-        self.defineVariable(@intCast(classVariable.index));
+        self.defineVariable(@intCast(class_var.index));
 
         // 将局部变量push到作用域. 类中的静态字段会被提升到这个作用域中，方法会通过upvalues引用它们.
         self.pushScope();
 
-        var classInfo: ClassInfo = .{
-            .isForeign = isForeign,
-            .name = className,
+        var class_info: ClassInfo = .{
+            .is_foreign = is_foreign,
+            .name = class_name,
             // 如果需要，分配属性map.
-            .classAttributes = if (self.attributes.?.entries.count() > 0) self.parser.vm.newMap() else null,
-            .methodAttributes = null,
+            .class_attrs = if (self.attributes.?.entries.count() > 0) self.parser.vm.newMap() else null,
+            .method_attrs = null,
         };
 
-        self.copyAttributes(classInfo.classAttributes); // 拷贝已解析的属性到类中.
+        self.copyAttributes(class_info.class_attrs); // 拷贝已解析的属性到类中.
 
         // 为类字段设置符号表. 初始时，字段从零开始编号.
         // 当方法被绑定到类时，字节码将通过[bindMethod]进行调整, 以考虑继承的字段.
-        classInfo.fields = SymbolTable.init(self.parser.vm.allocator);
+        class_info.fields = SymbolTable.init(self.parser.vm.allocator);
 
         // 设置符号缓冲区以跟踪重复的静态和实例方法.
-        classInfo.methods = UsizeBuffer.init(self.parser.vm.allocator);
-        classInfo.staticMethods = UsizeBuffer.init(self.parser.vm.allocator);
-        self.enclosingClass = &classInfo;
+        class_info.methods = UsizeBuffer.init(self.parser.vm.allocator);
+        class_info.static_methods = UsizeBuffer.init(self.parser.vm.allocator);
+        self.enclosing_class = &class_info;
 
         // 编译方法定义.
         self.consume(.TOKEN_LEFT_BRACE, "Expect '{{' after class declaration.");
         _ = self.matchLine();
 
         while (!self.match(.TOKEN_RIGHT_BRACE)) {
-            if (!self.method(classVariable)) break;
+            if (!self.method(class_var)) break;
 
             // 在最后一个定义后不需要换行符.
             if (self.match(.TOKEN_RIGHT_BRACE)) break;
@@ -977,32 +977,32 @@ pub const Compiler = struct {
         }
 
         // 如果存在属性, 为class创建一个ClassAttributes实例，并将其传递给CODE_END_CLASS
-        const hasAttr = classInfo.classAttributes != null or classInfo.methodAttributes != null;
-        if (hasAttr) {
-            self.emitClassAttributes(&classInfo);
-            self.loadVariable(classVariable);
+        const has_attr = class_info.class_attrs != null or class_info.method_attrs != null;
+        if (has_attr) {
+            self.emitClassAttributes(&class_info);
+            self.loadVariable(class_var);
             // 目前，不需要其他用途的CODE_END_CLASS，所以可以将其放在这个condition中.
             // 稍后，可以随时生成它并按需使用.
             self.emitOp(.CODE_END_CLASS);
         }
 
         // 根据字段数更新类.
-        if (!isForeign) {
-            self.func.?.code.rat(numFieldsInstruction).* = @truncate(classInfo.fields.count);
+        if (!is_foreign) {
+            self.func.?.code.rat(num_fields_instruction).* = @truncate(class_info.fields.count);
         }
 
         // 清除符号表以跟踪字段和方法名称.
-        classInfo.fields.clear();
-        classInfo.methods.clear();
-        classInfo.staticMethods.clear();
-        self.enclosingClass = null;
+        class_info.fields.clear();
+        class_info.methods.clear();
+        class_info.static_methods.clear();
+        self.enclosing_class = null;
         self.popScope();
     }
 
     // 编译import语句. 一个import会被编译为一系列指令. 给定:
     //     import "foo" for Bar, Baz
     // 首先，我们编译一个IMPORT_MODULE "foo"指令来加载模块本身.
-    // 当它完成执行时，导入的模块会将其ObjModule留在vm->lastModule中.
+    // 当它完成执行时，导入的模块会将其ObjModule留在vm->last_module中.
     // 然后，对于Bar和Baz，我们:
     //   1. 在当前作用域中声明一个变量，使用该名称.
     //   2. 编译一个IMPORT_VARIABLE指令，从刚才的模块加载变量的值.
@@ -1010,9 +1010,9 @@ pub const Compiler = struct {
     fn import(self: *@This()) void {
         self.ignoreNewLines();
         self.consume(.TOKEN_STRING, "Expect a string after 'import'.");
-        const moduleConstant = self.addConstant(self.parser.prev.value) orelse std.math.maxInt(usize); // TODO 这里不能panic, 而应继续执行??
+        const module_constant = self.addConstant(self.parser.prev.value) orelse std.math.maxInt(usize); // TODO 这里不能panic, 而应继续执行??
         // 加载模块
-        self.emitShortArg(.CODE_IMPORT_MODULE, @truncate(moduleConstant));
+        self.emitShortArg(.CODE_IMPORT_MODULE, @truncate(module_constant));
 
         // 从调用模块体的闭包中丢弃未使用的结果值.
         self.emitOp(.CODE_POP);
@@ -1027,10 +1027,10 @@ pub const Compiler = struct {
             self.consume(.TOKEN_NAME, "Expect variable name.");
 
             // 我们需要保留源变量，以便后续引用它.
-            var sourceVariableToken = self.parser.prev;
+            var source_var_token = self.parser.prev;
 
             // 为原始变量名定义一个字符串常量.
-            const sourceVariableConstant = self.addConstant(self.parser.vm.newString(sourceVariableToken.name())) orelse @panic("import: Add Constant failed");
+            const source_var_constant = self.addConstant(self.parser.vm.newString(source_var_token.name())) orelse @panic("import: Add Constant failed");
 
             // 存储所关注的变量符号
             var slot: u16 = 0;
@@ -1042,11 +1042,11 @@ pub const Compiler = struct {
             } else {
                 // import "module" for Source
                 // 直接使用 'Source' 作为名称来声明新变量.
-                slot = self.declareVariable(&sourceVariableToken);
+                slot = self.declareVariable(&source_var_token);
             }
 
             // 从模块中加载所需变量.
-            self.emitShortArg(.CODE_IMPORT_VARIABLE, @intCast(sourceVariableConstant));
+            self.emitShortArg(.CODE_IMPORT_VARIABLE, @intCast(source_var_constant));
 
             // 存储结果.
             self.defineVariable(slot);
@@ -1058,7 +1058,7 @@ pub const Compiler = struct {
     fn variableDefinition(self: *@This()) void {
         // 获取其名称，但不要立即声明它. 局部变量不应位于其自身的初始化器的作用域内.
         self.consume(.TOKEN_NAME, "Expect variable name.");
-        var nameToken = self.parser.prev;
+        var name_token = self.parser.prev;
 
         // 编译初始化器.
         if (self.match(.TOKEN_EQ)) {
@@ -1070,7 +1070,7 @@ pub const Compiler = struct {
         }
 
         // 现在将其放入作用域中.
-        const symbol = self.declareVariable(&nameToken);
+        const symbol = self.declareVariable(&name_token);
         self.defineVariable(symbol);
     }
 
@@ -1103,12 +1103,12 @@ pub const Compiler = struct {
 
     // 返回当前token的类型.
     pub inline fn peek(self: *@This()) TokenType {
-        return self.parser.curr.tokenType;
+        return self.parser.curr.token_type;
     }
 
     // 返回下一个token的类型.
     inline fn peekNext(self: *@This()) TokenType {
-        return self.parser.next.tokenType;
+        return self.parser.next.token_type;
     }
 
     // 根据[expected]消费当前token. 如果匹配到则返回true. 否则返回false.
@@ -1121,9 +1121,9 @@ pub const Compiler = struct {
     // 消费当前token. 如果token不匹配[expected], 则抛出错误.
     pub fn consume(self: *@This(), expected: TokenType, comptime errorMsg: []const u8) void {
         self.parser.nextToken();
-        if (self.parser.prev.tokenType != expected) {
+        if (self.parser.prev.token_type != expected) {
             self.doError(errorMsg, .{});
-            if (self.parser.curr.tokenType == expected) self.parser.nextToken();
+            if (self.parser.curr.token_type == expected) self.parser.nextToken();
         }
     }
 
@@ -1152,11 +1152,11 @@ pub const Compiler = struct {
     }
 
     fn disallowAttributes(self: *@This()) void {
-        if (self.numAttributes <= 0) return;
+        if (self.num_attrs <= 0) return;
 
         self.doError("Attributes can only specified before a class or a method", .{});
         self.attributes.?.clear();
-        self.numAttributes = 0;
+        self.num_attrs = 0;
     }
 
     // 添加一个属性到编译器属性map中的给定组中.
@@ -1213,8 +1213,8 @@ pub const Compiler = struct {
     pub fn emitOp(self: *@This(), op: OpCode) void {
         _ = self.emitByte(op.num());
         // 保持追踪栈的峰值.
-        self.numSlots +%= @bitCast(C.StackEffects[op.num()]);
-        if (self.numSlots > self.func.?.maxSlots) self.func.?.maxSlots = self.numSlots;
+        self.num_slots +%= @bitCast(C.StackEffects[op.num()]);
+        if (self.num_slots > self.func.?.max_slots) self.func.?.max_slots = self.num_slots;
     }
 
     // 生成一个伴有单字节参数的字节码指令. 返回参数的索引.
@@ -1299,15 +1299,15 @@ pub const Compiler = struct {
     fn emitClassAttributes(self: *@This(), classInfo: *ClassInfo) void {
         self.loadCoreVariable("ClassAttributes");
 
-        if (classInfo.classAttributes) |ca| self.emitAttributes(ca) else self.null_(false);
-        if (classInfo.methodAttributes) |ma| self.emitAttributeMethods(ma) else self.null_(false);
+        if (classInfo.class_attrs) |ca| self.emitAttributes(ca) else self.null_(false);
+        if (classInfo.method_attrs) |ma| self.emitAttributeMethods(ma) else self.null_(false);
 
         self.callMethod(2, "new(_,_)");
     }
 
     // 拷贝当前存储在编译器中的属性到目标map中, 同时清除源map, 因为意图是消费这些属性
     fn copyAttributes(self: *@This(), into: ?*ObjMap) void {
-        self.numAttributes = 0;
+        self.num_attrs = 0;
         const dest = into orelse return;
         const src = self.attributes orelse return;
         if (src.entries.count() == 0) return;
@@ -1315,42 +1315,42 @@ pub const Compiler = struct {
         dest.entries = src.entries.move();
     }
 
-    // 拷贝当前存储在编译器中的属性到当前enclosingClass的method特定属性中.
+    // 拷贝当前存储在编译器中的属性到当前enclosing_class的method特定属性中.
     // 这也会重置计数器, 因为意图是消费这些属性
-    fn copyMethodAttributes(self: *@This(), isForeign: bool, isStatic: bool, fullSignature: []const u8) void {
-        self.numAttributes = 0;
+    fn copyMethodAttributes(self: *@This(), is_foreign: bool, is_static: bool, full_sign: []const u8) void {
+        self.num_attrs = 0;
 
         var attributes = self.attributes orelse return;
         if (attributes.entries.count() == 0) return;
 
         const vm = self.parser.vm;
         // 为当前method创建一个map, 用于拷贝属性
-        const methodAttr = vm.newMap();
-        vm.pushRoot(methodAttr.asObj());
-        self.copyAttributes(methodAttr);
+        const method_attr = vm.newMap();
+        vm.pushRoot(method_attr.asObj());
+        self.copyAttributes(method_attr);
 
         // 如果必要的话, 在前面加上 'foreign static '
-        var fullLength = fullSignature.len;
-        if (isForeign) fullLength += 8;
-        if (isStatic) fullLength += 7;
-        var fullSignatureWithPrefix = [_]u8{0} ** (C.MAX_METHOD_SIGNATURE + 8 + 7);
-        const fPrefix = if (isForeign) "foreign " else "";
-        const sPrefix = if (isStatic) "static " else "";
-        _ = std.fmt.bufPrint(fullSignatureWithPrefix[0..], "{s}{s}{s}", .{ fPrefix, sPrefix, fullSignature }) catch unreachable;
+        var full_len = full_sign.len;
+        if (is_foreign) full_len += 8;
+        if (is_static) full_len += 7;
+        var full_sign_with_prefix = [_]u8{0} ** (C.MAX_METHOD_SIGNATURE + 8 + 7);
+        const fPrefix = if (is_foreign) "foreign " else "";
+        const sPrefix = if (is_static) "static " else "";
+        _ = std.fmt.bufPrint(full_sign_with_prefix[0..], "{s}{s}{s}", .{ fPrefix, sPrefix, full_sign }) catch unreachable;
 
-        if (self.enclosingClass.?.methodAttributes == null) {
-            self.enclosingClass.?.methodAttributes = vm.newMap();
+        if (self.enclosing_class.?.method_attrs == null) {
+            self.enclosing_class.?.method_attrs = vm.newMap();
         }
 
         // 存储方法属性到类map中
-        const key = vm.newString(fullSignatureWithPrefix[0..fullLength]);
-        self.enclosingClass.?.methodAttributes.?.mapSet(key, methodAttr.asObj().toVal());
+        const key = vm.newString(full_sign_with_prefix[0..full_len]);
+        self.enclosing_class.?.method_attrs.?.mapSet(key, method_attr.asObj().toVal());
 
         vm.popRoot();
     }
 
     pub fn addConstant(self: *@This(), constant: Value) ?usize {
-        if (self.parser.hasError) return null;
+        if (self.parser.has_error) return null;
 
         // 检查是否已经存在该常量. 如果存在, 则重用
         if (self.constants) |constants| {
@@ -1377,7 +1377,7 @@ pub const Compiler = struct {
 
     pub fn endCompiler(self: *@This(), debugName: []const u8) ?*ObjFunc {
         // 如果遇到错误, 不需要完成函数, 因为其已经被破坏.
-        if (self.parser.hasError) {
+        if (self.parser.has_error) {
             self.parser.vm.compiler = self.parent;
             return null;
         }
@@ -1389,8 +1389,8 @@ pub const Compiler = struct {
             p.emitShortArg(.CODE_CLOSURE, @intCast(constant.?));
 
             // 为每个upvalue生成字节码, 以便知道是否捕获局部变量或upvalue.
-            for (0..self.func.?.numUpvalues) |i| {
-                _ = p.emitByte(if (self.upvalues[i].isLocal) 1 else 0);
+            for (0..self.func.?.num_upvalues) |i| {
+                _ = p.emitByte(if (self.upvalues[i].is_local) 1 else 0);
                 _ = p.emitByte(@intCast(self.upvalues[i].index));
             }
         }
@@ -1404,14 +1404,14 @@ pub const Compiler = struct {
 
     pub fn doError(self: *@This(), comptime fmt: []const u8, args: anytype) void {
         const token = &self.parser.prev;
-        switch (token.tokenType) {
+        switch (token.token_type) {
             .TOKEN_ERROR => return,
             .TOKEN_LINE => self.parser.printError(token.line, "Error at newline", fmt, args),
             .TOKEN_EOF => self.parser.printError(token.line, "Error at end of file", fmt, args),
             else => {
                 var buf = [_]u8{0} ** (10 + C.MAX_VARIABLE_NAME + 4 + 1);
                 var label: []const u8 = undefined;
-                if (token.charNum <= C.MAX_VARIABLE_NAME) {
+                if (token.char_num <= C.MAX_VARIABLE_NAME) {
                     label = std.fmt.bufPrint(buf[0..], "Error at '{s}'", .{token.name()}) catch unreachable;
                 } else {
                     label = std.fmt.bufPrint(buf[0..], "Error at '{s}...'", .{token.name()[0..C.MAX_VARIABLE_NAME]}) catch unreachable;
@@ -1444,29 +1444,29 @@ pub const Compiler = struct {
 
     // 推入一个value用于从core中隐式导入的模块级变量.
     pub fn loadCoreVariable(self: *@This(), name: []const u8) void {
-        const symbol = self.parser.vm.symbolTableFind(&self.parser.module.variableNames, name) orelse @panic("Should have already defined core name.");
+        const symbol = self.parser.vm.symbolTableFind(&self.parser.module.variable_names, name) orelse @panic("Should have already defined core name.");
         self.emitShortArg(.CODE_LOAD_MODULE_VAR, @intCast(symbol));
     }
 
     // 根据[name]创建一个新的局部变量. 假设当前是局部作用域, 并且名称是唯一的.
     pub fn addLocal(self: *@This(), name: []const u8) usize {
-        var local = &self.locals[self.numLocals];
+        var local = &self.locals[self.num_locals];
         local.name = name;
-        local.depth = self.scopeDepth;
-        local.isUpvalue = false;
-        self.numLocals += 1;
-        return self.numLocals - 1;
+        local.depth = self.scope_depth;
+        local.is_upvalue = false;
+        self.num_locals += 1;
+        return self.num_locals - 1;
     }
 
     // 在当前作用域中存储一个具有先前定义的符号的变量.
     pub fn declareVariable(self: *@This(), itoken: ?*Token) u16 {
         const token = itoken orelse &self.parser.prev;
-        if (token.charNum > C.MAX_VARIABLE_NAME) {
+        if (token.char_num > C.MAX_VARIABLE_NAME) {
             self.doError("Variable name cannot be longer than {d} characters.", .{C.MAX_VARIABLE_NAME});
         }
 
         // 顶层模块作用域.
-        if (self.scopeDepth == -1) {
+        if (self.scope_depth == -1) {
             var line: i32 = -1;
             const symbol = self.parser.vm.defineVariable(self.parser.module, token.name(), &.NULL_VAL, &line);
 
@@ -1481,12 +1481,12 @@ pub const Compiler = struct {
         }
 
         // 检查当前作用域中是否已经声明了具有此名称的变量(外部作用域是允许的: 会被遮蔽)
-        var i = self.numLocals;
+        var i = self.num_locals;
         while (i > 0) {
             i -= 1;
             const local = &self.locals[i];
             // 一旦跳出当前作用域并进入外部作用域时, 停止.
-            if (local.depth < self.scopeDepth) break;
+            if (local.depth < self.scope_depth) break;
 
             if (std.mem.eql(u8, local.name, token.name())) {
                 self.doError("Variable is already declared in this scope.", .{});
@@ -1494,7 +1494,7 @@ pub const Compiler = struct {
             }
         }
 
-        if (self.numLocals == C.MAX_LOCALS) {
+        if (self.num_locals == C.MAX_LOCALS) {
             self.doError("Cannot declare more than {d} variables in one scope.", .{C.MAX_LOCALS});
             return @bitCast(@as(i16, @intCast(-1)));
         }
@@ -1511,7 +1511,7 @@ pub const Compiler = struct {
     // 在当前作用域中存储一个具有先前定义的符号的变量.
     pub fn defineVariable(self: *@This(), symbol: u16) void {
         // 存储变量, 如果它是局部变量, 则初始化结果已经在正确的槽位上了, 即已完成.
-        if (self.scopeDepth >= 0) return;
+        if (self.scope_depth >= 0) return;
 
         // 这是一个模块级变量, 所以将值存储在模块槽中, 然后丢弃初始化的临时值.
         self.emitShortArg(.CODE_STORE_MODULE_VAR, symbol);
@@ -1520,7 +1520,7 @@ pub const Compiler = struct {
 
     // 开启一个新的局部块作用域.
     fn pushScope(self: *@This()) void {
-        self.scopeDepth += 1;
+        self.scope_depth += 1;
     }
 
     // 生成代码以丢弃深度为[depth]或更大的局部变量.
@@ -1529,33 +1529,33 @@ pub const Compiler = struct {
     //
     // 返回被丢弃的局部变量的数量.
     fn discardLocals(self: *@This(), depth: i32) usize {
-        Utils.assert(self.scopeDepth > -1, "Should have a scope depth.");
+        Utils.assert(self.scope_depth > -1, "Should have a scope depth.");
 
-        var local = self.numLocals - 1;
+        var local = self.num_locals - 1;
         while (local >= 0 and self.locals[local].depth >= depth) : (local -= 1) {
             // 如果局部变量被闭包了，确保当它从堆栈中超出作用域时，upvalue也会被关闭.
             // 这里使用emitByte()而不是emitOp(), 因为我们不想跟踪这些pops的堆栈效应，因为变量在中断后仍在作用域内。
-            if (self.locals[local].isUpvalue) {
+            if (self.locals[local].is_upvalue) {
                 _ = self.emitByte(OpCode.CODE_CLOSE_UPVALUE.num());
             } else {
                 _ = self.emitByte(OpCode.CODE_POP.num());
             }
         }
 
-        return self.numLocals - 1 - local;
+        return self.num_locals - 1 - local;
     }
 
     // 关闭上一次push的块作用域并丢弃该作用域中声明的任何局部变量.
     // 该函数应当仅在堆栈上没有临时对象的语句上下文中调用.
     fn popScope(self: *@This()) void {
-        const popped = self.discardLocals(self.scopeDepth);
-        self.numLocals -= popped;
-        self.numSlots -= popped;
-        self.scopeDepth -= 1;
+        const popped = self.discardLocals(self.scope_depth);
+        self.num_locals -= popped;
+        self.num_slots -= popped;
+        self.scope_depth -= 1;
     }
 
     pub fn resolveLocal(self: *@This(), name: []const u8) ?usize {
-        var i = self.numLocals;
+        var i = self.num_locals;
         while (i > 0) {
             i -= 1;
             const lname = self.locals[i].name;
@@ -1564,18 +1564,18 @@ pub const Compiler = struct {
         return null;
     }
 
-    pub fn addUpvalue(self: *@This(), isLocal: bool, index: usize) usize {
+    pub fn addUpvalue(self: *@This(), is_local: bool, index: usize) usize {
         var func = self.func orelse @panic("Should have a function.");
         // 先查找是否存在
-        for (0..func.numUpvalues) |i| {
+        for (0..func.num_upvalues) |i| {
             const upvalue = &self.upvalues[i];
-            if (upvalue.index == index and upvalue.isLocal == isLocal) return i;
+            if (upvalue.index == index and upvalue.is_local == is_local) return i;
         }
         // 否则，添加一个新的upvalue
-        self.upvalues[func.numUpvalues].isLocal = isLocal;
-        self.upvalues[func.numUpvalues].index = index;
-        func.numUpvalues += 1;
-        return func.numUpvalues - 1;
+        self.upvalues[func.num_upvalues].is_local = is_local;
+        self.upvalues[func.num_upvalues].index = index;
+        func.num_upvalues += 1;
+        return func.num_upvalues - 1;
     }
 
     // 尝试在由 [compiler] 编译的函数中查找 [name]
@@ -1589,11 +1589,11 @@ pub const Compiler = struct {
         const parent = self.parent orelse return null;
 
         // 如果到达了方法边界(并且不是静态字段), 则停止查找. 将会将其视为self send.
-        if (name[0] != '_' and parent.enclosingClass != null) return null;
+        if (name[0] != '_' and parent.enclosing_class != null) return null;
 
         // 检查其是否是直接封闭函数的局部变量.
         if (parent.resolveLocal(name)) |i| {
-            parent.locals[i].isUpvalue = true; // 标记为upvalue, 以便在离开作用域时封闭.
+            parent.locals[i].is_upvalue = true; // 标记为upvalue, 以便在离开作用域时封闭.
             return self.addUpvalue(true, i);
         }
         // 检查其是否是立即封闭函数的upvalue.
@@ -1614,7 +1614,7 @@ pub const Compiler = struct {
     // 如果在模块作用域, 局部作用域或封闭函数的upvalue列表中找到该名称, 则返回该变量.
     pub fn resolveName(self: *@This(), name: []const u8) Variable {
         if (self.resolveNonmodule(name)) |v| return v;
-        const i = self.parser.vm.symbolTableFind(&self.parser.module.variableNames, name).?;
+        const i = self.parser.vm.symbolTableFind(&self.parser.module.variable_names, name).?;
         return .{ .scope = .SCOPE_MODULE, .index = i };
     }
 
@@ -1799,12 +1799,12 @@ pub const Compiler = struct {
 
     // 在初始的"{"被消费之后解析方法或函数体.
     //
-    // 如果 [Compiler->isInitializer] 为 `true`, 这是构造函数初始化器的主体.
+    // 如果 [Compiler->is_initializer] 为 `true`, 这是构造函数初始化器的主体.
     // 这种情况下, 它添加了确保它返回`this`的代码.
     pub fn finishBody(self: *@This()) void {
         const isExpressionBody = self.finishBlock();
 
-        if (self.isInitializer) {
+        if (self.is_initializer) {
             // 如果初始化器主体求值为一个value, 则丢弃.
             if (isExpressionBody) self.emitOp(.CODE_POP);
 
@@ -1838,7 +1838,7 @@ pub const Compiler = struct {
     }
 
     pub fn methodSymbol(self: *@This(), name: []const u8) usize {
-        return self.parser.vm.symbolTableEnsure(&self.parser.vm.methodNames, name);
+        return self.parser.vm.symbolTableEnsure(&self.parser.vm.method_names, name);
     }
 
     // 在方法 [signature] 中编译一个可选的setter参数.
@@ -1864,7 +1864,7 @@ pub const Compiler = struct {
     pub fn getEnclosingClassCompiler(self: *@This()) ?*Compiler {
         var compiler: ?*Compiler = self;
         while (compiler) |c| : (compiler = c.parent) {
-            if (c.enclosingClass != null) return compiler;
+            if (c.enclosing_class != null) return compiler;
         }
         return null;
     }
@@ -1873,7 +1873,7 @@ pub const Compiler = struct {
     // 如果不在类定义中, 返回NULL.
     pub fn getEnclosingClass(self: *@This()) ?*ClassInfo {
         const c = self.getEnclosingClassCompiler() orelse return null;
-        return c.enclosingClass;
+        return c.enclosing_class;
     }
 
     // 编译对于 [variable] 的读取或赋值指令.
@@ -1945,7 +1945,7 @@ pub const Compiler = struct {
         // 否则, 在模块级别查找名称.
         var vm = self.parser.vm;
         var variable: Variable = .{ .index = 0, .scope = .SCOPE_MODULE };
-        if (vm.symbolTableFind(&self.parser.module.variableNames, token.name())) |i| {
+        if (vm.symbolTableFind(&self.parser.module.variable_names, token.name())) |i| {
             variable.index = i;
         } else {
             // 隐式定义一个模块级变量, 希望稍后得到一个真正的定义.
@@ -2001,7 +2001,7 @@ pub const Compiler = struct {
 
         // 验证是否有足够的空间来存储隐藏的局部变量.
         // 我们期望在下面的代码中连续调用两个addLocal.
-        if (self.numLocals + 2 > C.MAX_LOCALS) {
+        if (self.num_locals + 2 > C.MAX_LOCALS) {
             self.doError("Cannot declare more than {d} variables in one scope. (Not enough space for for-loops internal variables)", .{C.MAX_LOCALS});
             return;
         }
@@ -2085,7 +2085,7 @@ pub const Compiler = struct {
         if (self.match(.TOKEN_BREAK)) {
             if (self.loop) |loop| {
                 // 因为将跳出作用域, 所以要确保作用域中的任何局部变量都被丢弃.
-                _ = self.discardLocals(loop.scopeDepth + 1);
+                _ = self.discardLocals(loop.scope_depth + 1);
 
                 // 为跳转到循环体末尾生成占位符指令.
                 // 当完成循环体编译并知道结束位置时, 我们会用合适的偏移量替换这些.
@@ -2098,7 +2098,7 @@ pub const Compiler = struct {
         } else if (self.match(.TOKEN_CONTINUE)) {
             if (self.loop) |loop| {
                 // 因为将跳出作用域, 所以要确保作用域中的任何局部变量都被丢弃.
-                _ = self.discardLocals(loop.scopeDepth + 1);
+                _ = self.discardLocals(loop.scope_depth + 1);
 
                 // 为跳转到循环体开头生成占位符指令.
                 const loopOffset: u16 = @intCast(self.func.?.code.count - loop.start + 3);
@@ -2115,10 +2115,10 @@ pub const Compiler = struct {
             // 编译返回值.
             if (self.peek() == .TOKEN_LINE) {
                 // 如果在return后没有表达式, 初始化器应返回'this', 而常规方法应返回null.
-                const result: OpCode = if (self.isInitializer) .CODE_LOAD_LOCAL_0 else .CODE_NULL;
+                const result: OpCode = if (self.is_initializer) .CODE_LOAD_LOCAL_0 else .CODE_NULL;
                 self.emitOp(result);
             } else {
-                if (self.isInitializer) self.doError("A constructor cannot return a value.", .{});
+                if (self.is_initializer) self.doError("A constructor cannot return a value.", .{});
                 self.expression();
             }
 
@@ -2140,44 +2140,44 @@ pub const Compiler = struct {
 pub const Local = struct {
     name: []const u8 = &.{}, // 局部变量名, 直接指向源代码字符串
     depth: i32 = 0, // 该变量所在的scope深度, 0代表最外层作用域--方法的参数, 或顶层代码中的第一个局部块
-    isUpvalue: bool = false, // 当前局部变量是否被用于upvalue
+    is_upvalue: bool = false, // 当前局部变量是否被用于upvalue
 };
 
 pub const Loop = struct {
     start: usize = 0, // 该loop应当转跳回的指令索引
-    exitJump: usize = 0, // 用于跳出该loop的`CODE_JUMP_IF`指令的argument索引
+    exit_jump: usize = 0, // 用于跳出该loop的`CODE_JUMP_IF`指令的argument索引
     body: usize = 0, // 循环体的起始指令索引
-    scopeDepth: i32 = 0, // 当loop中的一个break命中时, 应当退出的scope深度
+    scope_depth: i32 = 0, // 当loop中的一个break命中时, 应当退出的scope深度
     enclosing: ?*@This() = null, // 为NULL代表该loop是最外层的loop,否则指向包围该loop的loop
 };
 
 pub const ClassInfo = struct {
     name: *ObjString = undefined, // 类名
-    classAttributes: ?*ObjMap = null, // 类自身的属性
-    methodAttributes: ?*ObjMap = null, // 类的方法的属性
+    class_attrs: ?*ObjMap = null, // 类自身的属性
+    method_attrs: ?*ObjMap = null, // 类的方法的属性
     fields: SymbolTable = undefined, // 类的字段符号表
     methods: UsizeBuffer = undefined, // 类中定义的方法的符号索引. 用于检测重复定义的方法
-    staticMethods: UsizeBuffer = undefined,
-    isForeign: bool = undefined, // 为True时当前被编译的类是foreign类
-    inStatic: bool = undefined, // 为True时当前被编译的类是static类
+    static_methods: UsizeBuffer = undefined,
+    is_foreign: bool = undefined, // 为True时当前被编译的类是foreign类
+    in_static: bool = undefined, // 为True时当前被编译的类是static类
     signature: *Signature = undefined, // 被编译的方法的签名
 };
 
 pub const CompilerUpvalue = struct {
-    isLocal: bool = false, // 为True代表封闭函数中的upvalue捕获了局部变量, False代表捕获了upvalue
+    is_local: bool = false, // 为True代表封闭函数中的upvalue捕获了局部变量, False代表捕获了upvalue
     index: usize = 0, // 被捕获到封闭函数中的局部或upvalue变量的索引
 };
 
 pub const Token = struct {
-    tokenType: TokenType = .TOKEN_NONE,
-    sourceRef: []const u8 = &.{}, // 源码引用
-    charStart: usize = 0, // 代表token的起始位置(在source中的位置)
-    charNum: usize = 0, //   当前token的名称长度.
-    line: usize = 1, //      当前token对应行号, 从1开始.
-    value: Value = .{}, //   当token是字面量时对应的value.
+    token_type: TokenType = .TOKEN_NONE,
+    source_ref: []const u8 = &.{}, // 源码引用
+    char_start: usize = 0, // 代表token的起始位置(在source中的位置)
+    char_num: usize = 0, //   当前token的名称长度.
+    line: usize = 1, //       当前token对应行号, 从1开始.
+    value: Value = .{}, //    当token是字面量时对应的value.
 
     pub fn name(self: @This()) []const u8 {
-        return self.sourceRef[self.charStart .. self.charStart + self.charNum];
+        return self.source_ref[self.char_start .. self.char_start + self.char_num];
     }
 };
 
@@ -2197,7 +2197,7 @@ pub const Variable = struct {
 
 const Keyword = struct {
     identifier: []const u8,
-    tokenType: TokenType,
+    token_type: TokenType,
 };
 
 const TokenType = enum(u8) {

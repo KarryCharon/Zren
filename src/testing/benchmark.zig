@@ -31,7 +31,7 @@ fn call(vm: *VM.ZrenVM) void {
     // 由于VM不是可重入的，我们不能在这个foreign方法中调用.
     // 相反，我们创建一个新的VM来运行调用测试.
     const config: VM.ZrenConfiguration = .{};
-    var otherVM = VM.ZrenVM.newVm(config);
+    var otherVM = VM.ZrenVM.newVM(config);
     defer otherVM.deinit();
 
     _ = otherVM.interpret("main", testScript);

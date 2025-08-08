@@ -17,7 +17,7 @@ pub fn isModuleAnAPITest(mmm: []const u8) bool {
 }
 
 pub fn runFile(vm: *ZrenVM, path: []const u8) ZrenInterpretResult {
-    var module = Path.init(vm.rawAllocator, path) catch unreachable;
+    var module = Path.init(vm.raw_allocator, path) catch unreachable;
     defer module.deinit();
     var abs_module = module.resolveAbs() catch unreachable;
     defer abs_module.deinit();
@@ -26,8 +26,8 @@ pub fn runFile(vm: *ZrenVM, path: []const u8) ZrenInterpretResult {
         std.process.exit(Constants.C.EX_NOINPUT);
         return;
     }
-    const source = abs_module.readBytes(vm.rawAllocator) catch unreachable;
-    defer vm.rawAllocator.free(source);
+    const source = abs_module.readBytes(vm.raw_allocator) catch unreachable;
+    defer vm.raw_allocator.free(source);
     module.resolveRelInner() catch unreachable;
     if (module.pathType() == .PATH_TYPE_SIMPLE) {
         module.clear();
@@ -64,10 +64,10 @@ pub fn writeEx(self: *ZrenVM, msg: []const u8) void {
     _ = std.io.getStdOut().write(msg[0..i]) catch {};
 }
 
-pub fn errorEx(self: *ZrenVM, errorType: ZrenErrorType, module: []const u8, line: ?usize, msg: []const u8) void {
+pub fn errorEx(self: *ZrenVM, error_type: ZrenErrorType, module: []const u8, line: ?usize, msg: []const u8) void {
     _ = self;
     const o = std.io.getStdErr().writer();
-    switch (errorType) {
+    switch (error_type) {
         .ERROR_COMPILE => o.print("[{s} line {d}] {s}\n", .{ module, line.?, msg }) catch {},
         .ERROR_STACK_TRACE => o.print("[{s} line {d}] in {s}\n", .{ module, line.?, msg }) catch {},
         .ERROR_RUNTIME => o.print("{s}\n", .{msg}) catch {},
@@ -76,17 +76,17 @@ pub fn errorEx(self: *ZrenVM, errorType: ZrenErrorType, module: []const u8, line
 
 // 根据module加载源码
 pub fn loadModuleEx(self: *ZrenVM, module: []const u8) ZrenLoadModuleResult {
-    var path = Path.init(self.rawAllocator, module) catch unreachable;
+    var path = Path.init(self.raw_allocator, module) catch unreachable;
     defer path.deinit();
     path.push(".wren");
     var result: ZrenLoadModuleResult = .{};
-    result.source = path.readBytes(self.rawAllocator) catch &.{};
+    result.source = path.readBytes(self.raw_allocator) catch &.{};
     return result;
 }
 
 // 解析模块绝对路径
 pub fn resolveModulePathEx(self: *ZrenVM, importer: []const u8, module: []const u8, buf: []u8) usize {
-    var path = Path.init(self.rawAllocator, module) catch return 0;
+    var path = Path.init(self.raw_allocator, module) catch return 0;
     defer path.deinit();
     if (path.pathType() == .PATH_TYPE_SIMPLE) {
         std.mem.copyForwards(u8, buf, module);

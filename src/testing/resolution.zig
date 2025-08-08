@@ -23,7 +23,7 @@ fn reportError(vm: *VM.ZrenVM, etype: VM.ZrenErrorType, module: []const u8, line
 
 fn loadModuleComplete(vm: *VM.ZrenVM, module: []const u8, result: VM.ZrenLoadModuleResult) void {
     _ = module;
-    vm.rawAllocator.free(result.source);
+    vm.raw_allocator.free(result.source);
     //   free((void*)result.source);
 }
 
@@ -37,11 +37,11 @@ fn loadModule(vm: *VM.ZrenVM, module: []const u8) VM.ZrenLoadModuleResult {
         source = "System.print(\"ok\")";
     }
 
-    const string = vm.rawAllocator.alloc(u8, source.len) catch unreachable;
+    const string = vm.raw_allocator.alloc(u8, source.len) catch unreachable;
     std.mem.copyForwards(u8, string, source);
 
     const result: VM.ZrenLoadModuleResult = .{
-        .onComplete = loadModuleComplete,
+        .on_complete = loadModuleComplete,
         .source = string,
     };
     return result;
@@ -52,7 +52,7 @@ fn runTestVM(vm: *VM.ZrenVM, configuration: *VM.ZrenConfiguration, source: []con
     configuration.errorFn = reportError;
     configuration.loadModuleFn = loadModule;
 
-    var otherVM = VM.ZrenVM.newVm(configuration.*);
+    var otherVM = VM.ZrenVM.newVM(configuration.*);
     defer otherVM.deinit();
 
     // 应当可以执行代码

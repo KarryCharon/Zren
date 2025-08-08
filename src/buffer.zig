@@ -87,7 +87,7 @@ pub fn GenericBuffer(comptime Element: type) type {
 
             pub fn rshort(self: *@This()) u16 {
                 self.pos += 2;
-                return Utils.b8tob16(self.data[self.pos - 2], self.data[self.pos - 1]);
+                return Utils.b8Tob16(self.data[self.pos - 2], self.data[self.pos - 1]);
             }
 
             pub fn peek(self: *@This(), i: usize) u8 {

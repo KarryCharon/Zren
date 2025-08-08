@@ -19,30 +19,30 @@ fn initVm(allocator: std.mem.Allocator, is_api_test: bool) *ZrenVM {
     config.loadModuleFn = T.loadModuleEx;
     config.writeFn = T.writeEx;
     config.errorFn = T.errorEx;
-    config.initialHeapSize = 1024 * 1024 * 100;
+    config.init_heap_size = 1024 * 1024 * 100;
 
     if (is_api_test) {
         config.bindForeignClassFn = APITest.APITest_bindForeignClass;
         config.bindForeignMethodFn = APITest.APITest_bindForeignMethod;
     }
 
-    return ZrenVM.newVm(config);
+    return ZrenVM.newVM(config);
 }
 
 const APITest_Run = @import("api_test.zig").APITest_Run;
 
 pub fn handleArgs(allocator: std.mem.Allocator) u8 {
-    var argsIterator = try std.process.argsWithAllocator(allocator);
-    defer argsIterator.deinit();
-    const count = argsIterator.inner.count;
-    _ = argsIterator.next(); // 跳过可执行程序名
+    var args_iter = try std.process.argsWithAllocator(allocator);
+    defer args_iter.deinit();
+    const count = args_iter.inner.count;
+    _ = args_iter.next(); // 跳过可执行程序名
 
     if (count < 2) {
         print("This is a Zren test runner.\nUsage: zren_test [file]\n", .{});
         return 64;
     }
 
-    const arg1 = argsIterator.next().?;
+    const arg1 = args_iter.next().?;
 
     if (count == 2 and std.mem.eql(u8, arg1, "--version")) {
         print("Zren_test is running on Zren version {s}\n", .{"0.4.0"});
@@ -59,14 +59,14 @@ pub fn testRun() !u8 {
     // const handled = handleArgs(allocator);
     // if (handled != 0) return handled;
 
-    var argsIterator = try std.process.argsWithAllocator(allocator);
-    defer argsIterator.deinit();
-    _ = argsIterator.next(); // 跳过可执行程序名
+    var args_iter = try std.process.argsWithAllocator(allocator);
+    defer args_iter.deinit();
+    _ = args_iter.next(); // 跳过可执行程序名
 
     var exit_code: u8 = 0;
 
     var script: []const u8 = "";
-    script = argsIterator.next() orelse script;
+    script = args_iter.next() orelse script;
     const is_api_test = T.isModuleAnAPITest(script);
 
     vm = initVm(allocator, is_api_test);

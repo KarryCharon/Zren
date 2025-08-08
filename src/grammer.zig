@@ -90,13 +90,13 @@ pub const Signature = struct {
         return name[0..length];
     }
 
-    // 向[name]中追加[numParams]个"_"字符, 并用[leftBracket]和[rightBracket]包裹起来.
-    pub fn parameterList(self: *@This(), name: []u8, numParams: usize, leftBracket: u8, rightBracket: u8) usize {
+    // 向[name]中追加[num_params]个"_"字符, 并用[left_bracket]和[right_bracket]包裹起来.
+    pub fn parameterList(self: *@This(), name: []u8, num_params: usize, left_bracket: u8, right_bracket: u8) usize {
         _ = self;
         var length: usize = 0;
-        name[length] = leftBracket;
+        name[length] = left_bracket;
         length += 1;
-        for (0..numParams) |i| {
+        for (0..num_params) |i| {
             if (i >= Constant.C.MAX_PARAMETERS) break;
 
             if (i > 0) {
@@ -107,7 +107,7 @@ pub const Signature = struct {
             name[length] = '_';
             length += 1;
         }
-        name[length] = rightBracket;
+        name[length] = right_bracket;
         length += 1;
         return length;
     }
@@ -292,7 +292,7 @@ fn map(compiler: *Compiler, canAssign: bool) void {
 // 一元操作符, 如 `-foo`.
 fn unaryOp(compiler: *Compiler, canAssign: bool) void {
     _ = canAssign;
-    const rule = &rules[compiler.parser.prev.tokenType.num()];
+    const rule = &rules[compiler.parser.prev.token_type.num()];
     compiler.ignoreNewLines();
     compiler.parsePrecedence(Precedence.PREC_UNARY.poffset(1)); // 编译参数.
     compiler.callMethod(0, rule.name); // 对左侧调用操作符方法.
@@ -300,24 +300,24 @@ fn unaryOp(compiler: *Compiler, canAssign: bool) void {
 
 fn boolean(compiler: *Compiler, canAssign: bool) void {
     _ = canAssign;
-    compiler.emitOp(if (compiler.parser.prev.tokenType == .TOKEN_FALSE) .CODE_FALSE else .CODE_TRUE);
+    compiler.emitOp(if (compiler.parser.prev.token_type == .TOKEN_FALSE) .CODE_FALSE else .CODE_TRUE);
 }
 
 fn field(compiler: *Compiler, canAssign: bool) void {
     // 用假值初始化它, 这样就可以继续解析并尽量减少级联错误的数量.
     var f: usize = Constant.C.MAX_FIELDS; // TODO 这个 f 需要改进(类型)
 
-    var enclosingClass = compiler.getEnclosingClass();
+    var enclosing_class = compiler.getEnclosingClass();
 
-    if (enclosingClass == null) {
+    if (enclosing_class == null) {
         compiler.doError("Cannot reference a field outside of a class definition.", .{});
-    } else if (enclosingClass.?.isForeign) {
+    } else if (enclosing_class.?.is_foreign) {
         compiler.doError("Cannot define fields in a foreign class.", .{});
-    } else if (enclosingClass.?.inStatic) {
+    } else if (enclosing_class.?.in_static) {
         compiler.doError("Cannot use an instance field in a static method.", .{});
     } else {
         // 查找字段, 或隐式定义它.
-        f = compiler.parser.vm.symbolTableEnsure(&enclosingClass.?.fields, compiler.parser.prev.name());
+        f = compiler.parser.vm.symbolTableEnsure(&enclosing_class.?.fields, compiler.parser.prev.name());
 
         if (f >= Constant.C.MAX_FIELDS) {
             compiler.doError("A class can only have {d} fields.", .{Constant.C.MAX_FIELDS});
@@ -333,7 +333,7 @@ fn field(compiler: *Compiler, canAssign: bool) void {
     }
 
     // 如果直接在方法内部, 则使用更优化的指令.
-    if (compiler.parent != null and compiler.parent.?.enclosingClass == enclosingClass) {
+    if (compiler.parent != null and compiler.parent.?.enclosing_class == enclosing_class) {
         _ = compiler.emitByteArg(if (isLoad) .CODE_LOAD_FIELD_THIS else .CODE_STORE_FIELD_THIS, @truncate(f));
     } else {
         compiler.loadThis();
@@ -415,8 +415,8 @@ fn stringInterpolation(compiler: *Compiler, canAssign: bool) void {
 }
 
 fn super_(compiler: *Compiler, canAssign: bool) void {
-    const enclosingClass = compiler.getEnclosingClass();
-    if (enclosingClass == null) {
+    const enclosing_class = compiler.getEnclosingClass();
+    if (enclosing_class == null) {
         compiler.doError("Cannot use 'super' outside of a method.", .{});
     }
 
@@ -430,9 +430,9 @@ fn super_(compiler: *Compiler, canAssign: bool) void {
         // 编译 superclass call.
         compiler.consume(.TOKEN_NAME, "Expect method name after 'super.'.");
         compiler.namedCall(canAssign, .CODE_SUPER_0);
-    } else if (enclosingClass) |e| {
+    } else if (enclosing_class) |e| {
         // 非显式名称, 所以使用封闭方法的名称.
-        // 首先, 确保我们检查 enclosingClass 不是 NULL, 虽然已经报告了错误, 但这里不能崩溃.
+        // 首先, 确保我们检查 enclosing_class 不是 NULL, 虽然已经报告了错误, 但这里不能崩溃.
         compiler.methodCall(.CODE_SUPER_0, e.signature);
     }
 }
@@ -522,7 +522,7 @@ fn conditional(compiler: *Compiler, canAssign: bool) void {
 
 fn infixOp(compiler: *Compiler, canAssign: bool) void {
     _ = canAssign;
-    const rule = &rules[@intFromEnum(compiler.parser.prev.tokenType)];
+    const rule = &rules[@intFromEnum(compiler.parser.prev.token_type)];
 
     // 中缀操作符不能终结表达式.
     compiler.ignoreNewLines();
